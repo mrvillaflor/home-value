@@ -6,7 +6,7 @@
  * This script does not print the address.
  */
 
-const { parseSourceIds, runSources } = require("./live");
+const { LIVE_SOURCE_IDS, runSources } = require("./live");
 
 function maskAddress() {
   const address = process.env.ADDRESS;
@@ -45,7 +45,9 @@ async function main() {
   maskAddress();
 
   const address = process.env.ADDRESS || "";
-  const sourceIds = parseSourceIds(process.env.SOURCE_ID);
+  // Always the full live set. One Actions job covers every card, even if
+  // an older API sent a single source id.
+  const sourceIds = LIVE_SOURCE_IDS;
   const sessionId = process.env.SESSION_ID || "";
   const callbackUrl = process.env.CALLBACK_URL || "";
   const secret = process.env.WORKER_SECRET || "";
