@@ -26,7 +26,7 @@ The source list lives in one array in `assets/app.js`. The hero index and the re
 
 Submitting a full street address creates a session on the API and polls it for about three minutes. The page says "Waking up the server" while Render starts, then "Looking up Homebot" while GitHub Actions runs. Homebot is the only live source. Redfin, Zillow, Chase, PennyMac, Homes.com, and Rate.com stay Pending / Coming soon. If Homebot asks for an account before showing a value, the card says Unavailable. The page does not invent a dollar amount. Nothing is saved in `localStorage`. Refreshing the page clears the address and the results.
 
-`API_BASE` in `assets/app.js` is `https://home-value-api.onrender.com`, matching the `home-value-api` service in `render.yaml`.
+`API_BASE` in `assets/app.js` is `https://home-value-api-3mvp.onrender.com`. The Blueprint service name is still `home-value-api`; Render assigned the `-3mvp` suffix on the live URL.
 
 Each new session asks GitHub to run `.github/workflows/lookup.yml` on `main`. The API allows 5 lookups per IP every 10 minutes and a global cap of 100 per day (`DAILY_CAP`). Those counters live in memory, so they reset when the free Render instance sleeps or restarts. Set `WORKER_URL` only if you want the API to call an HTTP worker instead of Actions.
 
@@ -46,7 +46,7 @@ Each new session asks GitHub to run `.github/workflows/lookup.yml` on `main`. Th
    - `GITHUB_TOKEN` to the fine-grained token from step 2
    - `WORKER_SECRET` to the same secret as the Actions secret
 6. Leave `GITHUB_REPO` as `mrvillaflor/home-value` and `GITHUB_WORKFLOW` as `lookup.yml`. The Blueprint already sets those, plus `ALLOWED_ORIGIN` (`https://mrvillaflor.github.io`) and `DAILY_CAP` (`100`).
-7. Confirm `https://home-value-api.onrender.com/health` returns `{"ok":true}`.
+7. Confirm `https://home-value-api-3mvp.onrender.com/health` returns `{"ok":true}`. Render may add a suffix to the Blueprint name, so use the hostname shown on the service, not only `home-value-api.onrender.com`.
 
 Render sets `RENDER_EXTERNAL_URL` itself. The API sends that origin plus `/callbacks` to the workflow. You do not set a callback URL by hand.
 
