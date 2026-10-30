@@ -6,7 +6,7 @@ COPY package.json package-lock.json ./
 ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 RUN npm ci --omit=dev
 
-COPY server.js scrape.js homebot.js ./
+COPY server.js scrape.js homebot.js run-once.js ./
 
 ENV PORT=8080
 EXPOSE 8080

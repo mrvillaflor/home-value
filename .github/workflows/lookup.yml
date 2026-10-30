@@ -1,0 +1,65 @@
+# One Homebot lookup per dispatch. Runs are independent, so several
+# addresses can be in flight at once. There is no shared concurrency group.
+name: Lookup
+
+on:
+  workflow_dispatch:
+    inputs:
+      sessionId:
+        description: Session id
+        required: true
+        type: string
+      address:
+        description: Street address
+        required: true
+        type: string
+      sourceId:
+        description: Source id
+        required: true
+        type: string
+      callbackUrl:
+        description: API callback URL
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  lookup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: worker/package-lock.json
+
+      - name: Install worker dependencies
+        working-directory: worker
+        run: npm ci
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('worker/package-lock.json') }}
+
+      - name: Install Playwright Chromium
+        working-directory: worker
+        run: npx playwright install --with-deps chromium
+
+      - name: Look up Homebot
+        working-directory: worker
+        env:
+          ADDRESS: ${{ inputs.address }}
+          SESSION_ID: ${{ inputs.sessionId }}
+          SOURCE_ID: ${{ inputs.sourceId }}
+          CALLBACK_URL: ${{ inputs.callbackUrl }}
+          WORKER_SECRET: ${{ secrets.WORKER_SECRET }}
+        run: node run-once.js

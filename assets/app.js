@@ -15,8 +15,8 @@
 const API_BASE = "https://home-value-api.onrender.com";
 const LIVE_SOURCE_ID = "homebot";
 const POLL_MS = 2000;
-const POST_TIMEOUT_MS = 75000;
-const POLL_BUDGET_MS = 90000;
+const POST_TIMEOUT_MS = 90000;
+const POLL_BUDGET_MS = 180000;
 
 const SOURCES = [
   { id: "redfin", name: "Redfin" },
@@ -160,7 +160,7 @@ function applySource(card, source) {
   const status = card.querySelector(".source-status");
   const detail = card.querySelector(".source-detail");
   status.textContent = "Loading";
-  detail.textContent = "Checking Homebot";
+  detail.textContent = "Looking up Homebot";
   card.dataset.state = "loading";
 }
 
@@ -180,7 +180,7 @@ function renderLookup(address) {
     el(
       "p",
       "results-note",
-      "Waking up the server. This often takes about a minute. Homebot is the source being checked."
+      "Waking up the server"
     )
   );
 
@@ -313,7 +313,7 @@ lookupForm.addEventListener("submit", async (event) => {
       paintSession(update);
       const live = (update.sources || []).find((source) => source.id === LIVE_SOURCE_ID);
       if (live && live.status === "pending") {
-        setNote("Checking Homebot. The other sources stay pending.");
+        setNote("Looking up Homebot");
       }
     });
     if (token !== currentRequest) return;

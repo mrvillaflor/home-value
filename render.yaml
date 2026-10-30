@@ -1,6 +1,8 @@
 # Render Blueprint for the session API.
-# Free web service, no disk database. Set WORKER_URL and WORKER_SECRET
-# when applying the Blueprint. Render supplies PORT and RENDER_EXTERNAL_URL.
+# Free web service, no disk database. Render supplies PORT and
+# RENDER_EXTERNAL_URL, which the API uses as the callback base.
+# WORKER_URL is optional: if you set it on the service, lookups go to
+# that HTTP worker instead of GitHub Actions.
 services:
   - type: web
     name: home-value-api
@@ -11,9 +13,17 @@ services:
     startCommand: npm start
     healthCheckPath: /health
     envVars:
-      - key: WORKER_URL
+      - key: GITHUB_TOKEN
         sync: false
       - key: WORKER_SECRET
         sync: false
+      - key: GITHUB_REPO
+        value: mrvillaflor/home-value
+      - key: GITHUB_WORKFLOW
+        value: lookup.yml
+      - key: ALLOWED_ORIGIN
+        value: https://mrvillaflor.github.io
+      - key: DAILY_CAP
+        value: "100"
       - key: NODE_VERSION
         value: "22"

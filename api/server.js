@@ -13,11 +13,21 @@
 
 const http = require("http");
 const crypto = require("crypto");
+const { dispatchGitHubWorkflow } = require("./dispatch");
+const { createLimiter } = require("./limits");
 
 const PORT = Number(process.env.PORT) || 10000;
 const WORKER_URL = (process.env.WORKER_URL || "").replace(/\/$/, "");
 const WORKER_SECRET = process.env.WORKER_SECRET || "";
+const GITHUB_TOKEN = process.env.GITHUB_TOKEN || "";
+const GITHUB_REPO = process.env.GITHUB_REPO || "mrvillaflor/home-value";
+const GITHUB_WORKFLOW = process.env.GITHUB_WORKFLOW || "lookup.yml";
+const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || "https://mrvillaflor.github.io";
+const DAILY_CAP = Number(process.env.DAILY_CAP || 100);
 const LIVE_SOURCE_ID = "homebot";
+const limiter = createLimiter({
+  dailyCap: Number.isFinite(DAILY_CAP) && DAILY_CAP > 0 ? DAILY_CAP : 100,
+});
 
 const SOURCES = [
   { id: "redfin", name: "Redfin" },
@@ -69,8 +79,16 @@ function publicBase(req) {
 
 function allowOrigin(origin) {
   if (!origin) return false;
-  if (origin === "https://mrvillaflor.github.io") return true;
+  if (origin === ALLOWED_ORIGIN) return true;
   return /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
+}
+
+function clientIp(req) {
+  const forwarded = req.headers["x-forwarded-for"];
+  if (typeof forwarded === "string" && forwarded.trim()) {
+    return forwarded.split(",")[0].trim();
+  }
+  return req.socket.remoteAddress || "unknown";
 }
 
 function applyCors(req, res) {
@@ -175,25 +193,20 @@ function normalizeResult(body) {
   };
 }
 
-function dispatchWorker(req, session) {
-  const rowPatch = (patch) => markSource(session, LIVE_SOURCE_ID, patch);
+function markUnavailable(session, error) {
+  markSource(session, LIVE_SOURCE_ID, {
+    status: "unavailable",
+    value: null,
+    low: null,
+    high: null,
+    fetchedAt: new Date().toISOString(),
+    error,
+  });
+}
 
-  if (!WORKER_URL || !WORKER_SECRET) {
-    rowPatch({
-      status: "unavailable",
-      value: null,
-      low: null,
-      high: null,
-      fetchedAt: new Date().toISOString(),
-      error: "The lookup service is not configured.",
-    });
-    return;
-  }
-
-  const callbackUrl = publicBase(req) + "/callbacks";
+function dispatchHttpWorker(session, callbackUrl) {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 55000);
-
+  const timer = setTimeout(() => controller.abort(), 20000);
   fetch(WORKER_URL + "/jobs", {
     method: "POST",
     headers: {
@@ -208,29 +221,54 @@ function dispatchWorker(req, session) {
     }),
     signal: controller.signal,
   })
-    .then(async (response) => {
+    .then((response) => {
       if (response.status !== 202 && !response.ok) {
-        rowPatch({
-          status: "unavailable",
-          value: null,
-          low: null,
-          high: null,
-          fetchedAt: new Date().toISOString(),
-          error: "The lookup service did not accept the address.",
-        });
+        markUnavailable(session, "The lookup service did not accept the address.");
       }
     })
     .catch(() => {
-      rowPatch({
-        status: "unavailable",
-        value: null,
-        low: null,
-        high: null,
-        fetchedAt: new Date().toISOString(),
-        error: "The lookup service did not respond.",
-      });
+      markUnavailable(session, "The lookup service did not respond.");
     })
     .finally(() => clearTimeout(timer));
+}
+
+function dispatchWorker(req, session) {
+  const callbackUrl = publicBase(req) + "/callbacks";
+
+  if (WORKER_URL) {
+    if (!WORKER_SECRET) {
+      markUnavailable(session, "The lookup service is not configured.");
+      return;
+    }
+    dispatchHttpWorker(session, callbackUrl);
+    return;
+  }
+
+  if (!GITHUB_TOKEN || !WORKER_SECRET) {
+    markUnavailable(session, "The lookup service is not configured.");
+    return;
+  }
+
+  dispatchGitHubWorkflow({
+    token: GITHUB_TOKEN,
+    repo: GITHUB_REPO,
+    workflow: GITHUB_WORKFLOW,
+    ref: "main",
+    inputs: {
+      sessionId: session.id,
+      address: session.address,
+      sourceId: LIVE_SOURCE_ID,
+      callbackUrl,
+    },
+  })
+    .then(() => {
+      process.stdout.write("dispatched " + session.id + "\n");
+    })
+    .catch((error) => {
+      const status = error && error.status ? " " + error.status : "";
+      process.stdout.write("dispatch failed " + session.id + status + "\n");
+      markUnavailable(session, "The lookup service did not start.");
+    });
 }
 
 const server = http.createServer(async (req, res) => {
@@ -259,6 +297,14 @@ const server = http.createServer(async (req, res) => {
     const address = typeof body.address === "string" ? body.address.trim().replace(/\s+/g, " ") : "";
     if (!isFullAddress(address)) {
       send(res, 400, { error: "Enter a full street address, including city and state." });
+      return;
+    }
+    const limit = limiter.check(clientIp(req));
+    if (!limit.ok) {
+      const error = limit.reason === "daily"
+        ? "The lookup limit for today has been reached."
+        : "Too many lookups from this network. Try again in a few minutes.";
+      send(res, 429, { error });
       return;
     }
     pruneSessions();
