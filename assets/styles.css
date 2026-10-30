@@ -456,6 +456,7 @@ button[type="submit"]:active {
   font-size: 2rem;
   font-optical-sizing: auto;
   line-height: 1.1;
+  overflow-wrap: anywhere;
 }
 
 .source-detail {

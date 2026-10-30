@@ -5,9 +5,18 @@
  * here; the hero index and the results grid both follow it.
  * If a name changes, also update the identification sentence in the footer.
  *
+ * API_BASE is the Render service. Change this one constant if the URL differs.
+ * LIVE_SOURCE_ID is the only source the API asks the worker to fetch.
+ *
  * Nothing on this page is written to localStorage, sessionStorage, or a cookie.
  * A refresh starts from an empty address and no results.
  */
+
+const API_BASE = "https://home-value-api.onrender.com";
+const LIVE_SOURCE_ID = "redfin";
+const POLL_MS = 2000;
+const POST_TIMEOUT_MS = 75000;
+const POLL_BUDGET_MS = 90000;
 
 const SOURCES = [
   { id: "redfin", name: "Redfin" },
@@ -18,43 +27,6 @@ const SOURCES = [
   { id: "homes", name: "Homes.com" },
   { id: "rate", name: "Rate.com" },
 ];
-
-/**
- * fetchEstimates(address)
- *
- * Plug-in point for a future Render web service.
- *
- * Planned contract:
- *   1. POST the address. The service returns a session id.
- *   2. Poll that session. Each source resolves on its own.
- *   3. Return one row per source: { id, status, estimate }.
- *
- * Do not invent dollar amounts. `estimate` stays null until a source
- * actually returns a figure. This draft does not call the network. It
- * pauses so the loading state is visible, then marks every configured
- * source pending.
- *
- * @param {string} address
- * @returns {Promise<Array<{ id: string, name: string, status: "pending", label: string, estimate: null }>>}
- */
-async function fetchEstimates(address) {
-  if (!address || typeof address !== "string") {
-    throw new Error("A full address is required.");
-  }
-
-  // DRAFT ONLY. Delete this pause when the session request above is real.
-  await new Promise((resolve) => {
-    window.setTimeout(resolve, 700);
-  });
-
-  return SOURCES.map((source) => ({
-    id: source.id,
-    name: source.name,
-    status: "pending",
-    label: "Coming soon",
-    estimate: null,
-  }));
-}
 
 const lookupForm = document.querySelector("#lookup");
 const addressInput = document.querySelector("#address");
@@ -76,6 +48,20 @@ function isFullAddress(value) {
   if (!/\d/.test(value)) return false;
   if (!/[A-Za-z]/.test(value)) return false;
   return true;
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
+}
+
+function formatDollars(value) {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 0,
+  }).format(value);
 }
 
 function writeSourceIndex() {
@@ -101,7 +87,84 @@ function clearPage() {
   }
 }
 
-function renderLoading(address) {
+function setNote(text) {
+  const note = results.querySelector(".results-note");
+  if (note) note.textContent = text;
+}
+
+function showPlaceholder(card) {
+  const slot = card.querySelector(".shimmer-slot");
+  if (slot) slot.remove();
+  const kicker = card.querySelector(".source-kicker");
+  const status = card.querySelector(".source-status");
+  const detail = card.querySelector(".source-detail");
+  if (kicker) kicker.textContent = "Status";
+  status.textContent = "Pending";
+  detail.textContent = "Coming soon";
+  card.dataset.state = "pending";
+}
+
+function showUnavailable(card, detail) {
+  const slot = card.querySelector(".shimmer-slot");
+  if (slot) slot.remove();
+  const kicker = card.querySelector(".source-kicker");
+  const status = card.querySelector(".source-status");
+  const detailNode = card.querySelector(".source-detail");
+  if (kicker) kicker.textContent = "Status";
+  status.textContent = "Unavailable";
+  detailNode.textContent = detail || "No estimate returned";
+  card.dataset.state = "unavailable";
+}
+
+function showEstimate(card, source) {
+  const slot = card.querySelector(".shimmer-slot");
+  if (slot) slot.remove();
+  const kicker = card.querySelector(".source-kicker");
+  const status = card.querySelector(".source-status");
+  const detail = card.querySelector(".source-detail");
+  if (kicker) kicker.textContent = "Estimate";
+  status.textContent = formatDollars(source.value);
+  if (typeof source.low === "number" && typeof source.high === "number") {
+    detail.textContent = formatDollars(source.low) + " – " + formatDollars(source.high);
+  } else {
+    detail.textContent = "Redfin Estimate";
+  }
+  card.dataset.state = "done";
+}
+
+function visitorError(error) {
+  if (typeof error !== "string") return "No estimate returned";
+  const text = error.replace(/\s+/g, " ").trim();
+  if (!text || text.length > 160 || /<|>/.test(text)) return "No estimate returned";
+  return text;
+}
+
+/*
+ * Dollars are rendered only for the live source, and only when the API
+ * says that source is done and sent a finite value. The other cards stay
+ * on the placeholder.
+ */
+function applySource(card, source) {
+  if (!source || source.id !== LIVE_SOURCE_ID) {
+    showPlaceholder(card);
+    return;
+  }
+  if (source.status === "done" && typeof source.value === "number" && Number.isFinite(source.value)) {
+    showEstimate(card, source);
+    return;
+  }
+  if (source.status === "unavailable") {
+    showUnavailable(card, visitorError(source.error));
+    return;
+  }
+  const status = card.querySelector(".source-status");
+  const detail = card.querySelector(".source-detail");
+  status.textContent = "Loading";
+  detail.textContent = "Checking Redfin";
+  card.dataset.state = "loading";
+}
+
+function renderLookup(address) {
   results.hidden = false;
   results.setAttribute("aria-busy", "true");
   results.replaceChildren();
@@ -112,12 +175,14 @@ function renderLoading(address) {
   const title = el("h2", null, address);
   title.id = "results-title";
   title.tabIndex = -1;
-  const note = el(
-    "p",
-    "results-note",
-    "Loading " + SOURCES.length + " sources. No dollar amount will be shown."
+  head.append(
+    title,
+    el(
+      "p",
+      "results-note",
+      "Waking up the server. This often takes about a minute. Redfin is the source being checked."
+    )
   );
-  head.append(title, note);
 
   const grid = el("div", "source-grid");
   grid.setAttribute("role", "list");
@@ -125,21 +190,24 @@ function renderLoading(address) {
   SOURCES.forEach((source) => {
     const card = el("article", "source");
     card.dataset.source = source.id;
-    card.dataset.state = "loading";
     card.setAttribute("role", "listitem");
     card.append(el("h3", null, source.name));
+    card.append(el("p", "source-kicker", "Status"));
+    card.append(el("p", "source-status", ""));
+    card.append(el("p", "source-detail", ""));
 
-    const slot = el("div", "shimmer-slot");
-    const shimmer = el("div", "shimmer");
-    shimmer.setAttribute("aria-hidden", "true");
-    slot.append(shimmer);
-
-    card.append(
-      slot,
-      el("p", "source-kicker", "Status"),
-      el("p", "source-status", "Loading"),
-      el("p", "source-detail", "Coming soon")
-    );
+    if (source.id === LIVE_SOURCE_ID) {
+      const slot = el("div", "shimmer-slot");
+      const shimmer = el("div", "shimmer");
+      shimmer.setAttribute("aria-hidden", "true");
+      slot.append(shimmer);
+      card.insertBefore(slot, card.querySelector(".source-kicker"));
+      card.querySelector(".source-status").textContent = "Loading";
+      card.querySelector(".source-detail").textContent = "Waking up the server";
+      card.dataset.state = "loading";
+    } else {
+      showPlaceholder(card);
+    }
     grid.append(card);
   });
 
@@ -157,54 +225,70 @@ function renderLoading(address) {
   }
 }
 
-/*
- * This draft always prints the placeholder, even if a row carries an
- * estimate field. When the API is live, render a real figure here and
- * only here — never a stand-in number.
- */
-function showPlaceholder(card) {
-  const slot = card.querySelector(".shimmer-slot");
-  if (slot) slot.remove();
-  const status = card.querySelector(".source-status");
-  const detail = card.querySelector(".source-detail");
-  status.textContent = "Pending";
-  detail.textContent = "Coming soon";
-  card.dataset.state = "pending";
+function paintSession(session) {
+  const rows = session && Array.isArray(session.sources) ? session.sources : [];
+  const byId = new Map(rows.map((row) => [row.id, row]));
+  results.querySelectorAll(".source").forEach((card) => {
+    applySource(card, byId.get(card.dataset.source));
+  });
 }
 
-function showProblem() {
-  results.setAttribute("aria-busy", "false");
-  const note = results.querySelector(".results-note");
-  if (note) {
-    note.textContent = "The sources could not be listed. Enter the address again. No dollar amount is shown.";
-  }
-  results.querySelectorAll(".source").forEach(showPlaceholder);
-}
-
-async function presentRows(rows, token) {
-  const returned = new Map(Array.isArray(rows) ? rows.map((row) => [row.id, row]) : []);
-  const cards = [...results.querySelectorAll(".source")];
-  const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-
-  for (const card of cards) {
-    if (token !== currentRequest) return;
-    const row = returned.get(card.dataset.source);
-    // row.estimate is intentionally unused. This draft never prints a figure.
-    void row;
-    showPlaceholder(card);
-    if (!reduce) {
-      await new Promise((resolve) => {
-        window.setTimeout(resolve, 90);
-      });
+async function requestJson(url, options, timeoutMs) {
+  const controller = new AbortController();
+  const timer = window.setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, { ...options, signal: controller.signal, cache: "no-store" });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const error = new Error(data.error || "The server could not start a lookup.");
+      error.status = response.status;
+      throw error;
     }
+    return data;
+  } finally {
+    window.clearTimeout(timer);
+  }
+}
+
+/**
+ * fetchEstimates(address)
+ *
+ * POST /sessions { address } → { sessionId }
+ * Then GET /sessions/:id about every 2 seconds for up to 90 seconds.
+ * onUpdate is called with each session payload so the live card can fill
+ * as soon as Redfin arrives. Other sources are left pending.
+ */
+async function fetchEstimates(address, onUpdate) {
+  if (!address || typeof address !== "string") {
+    throw new Error("A full address is required.");
   }
 
-  if (token !== currentRequest) return;
-  const note = results.querySelector(".results-note");
-  if (note) {
-    note.textContent = "Pending. No dollar amount is shown. These placeholders are not figures from the sources.";
+  const created = await requestJson(
+    API_BASE + "/sessions",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ address }),
+    },
+    POST_TIMEOUT_MS
+  );
+
+  if (!created.sessionId) {
+    throw new Error("The server did not start a lookup.");
   }
-  results.setAttribute("aria-busy", "false");
+
+  const started = Date.now();
+  let latest = null;
+  while (Date.now() - started < POLL_BUDGET_MS) {
+    latest = await requestJson(API_BASE + "/sessions/" + created.sessionId, { method: "GET" }, 15000);
+    if (onUpdate) onUpdate(latest);
+    const live = (latest.sources || []).find((source) => source.id === LIVE_SOURCE_ID);
+    if (live && (live.status === "done" || live.status === "unavailable")) {
+      return latest;
+    }
+    await sleep(POLL_MS);
+  }
+  return latest;
 }
 
 lookupForm.addEventListener("submit", async (event) => {
@@ -221,15 +305,41 @@ lookupForm.addEventListener("submit", async (event) => {
 
   addressInput.removeAttribute("aria-invalid");
   const token = ++currentRequest;
-  renderLoading(address);
+  renderLookup(address);
 
   try {
-    const rows = await fetchEstimates(address);
+    const session = await fetchEstimates(address, (update) => {
+      if (token !== currentRequest) return;
+      paintSession(update);
+      const live = (update.sources || []).find((source) => source.id === LIVE_SOURCE_ID);
+      if (live && live.status === "pending") {
+        setNote("Checking Redfin. The other sources stay pending.");
+      }
+    });
     if (token !== currentRequest) return;
-    await presentRows(rows, token);
+
+    const live = session && (session.sources || []).find((source) => source.id === LIVE_SOURCE_ID);
+    if (live && live.status === "done") {
+      paintSession(session);
+      setNote("Redfin returned an estimate. The other sources are not connected yet.");
+    } else if (live && live.status === "unavailable") {
+      paintSession(session);
+      setNote("Redfin did not return an estimate. The other sources are not connected yet.");
+    } else {
+      const card = results.querySelector('[data-source="' + LIVE_SOURCE_ID + '"]');
+      if (card) showUnavailable(card, "The estimate did not arrive in time.");
+      setNote("Redfin did not respond in time. No dollar amount is shown.");
+    }
+    results.setAttribute("aria-busy", "false");
   } catch (error) {
     if (token !== currentRequest) return;
-    showProblem();
+    const card = results.querySelector('[data-source="' + LIVE_SOURCE_ID + '"]');
+    const timedOut = error && error.name === "AbortError";
+    if (card) {
+      showUnavailable(card, timedOut ? "The server is still waking up. Try the address again." : "The lookup service did not respond.");
+    }
+    setNote(timedOut ? "The server did not wake up in time. No dollar amount is shown." : "The lookup service did not respond. No dollar amount is shown.");
+    results.setAttribute("aria-busy", "false");
   }
 });
 
@@ -242,7 +352,6 @@ window.addEventListener("pageshow", (event) => {
     writeSourceIndex();
     return;
   }
-  // A normal reload can restore the field after this script runs.
   window.setTimeout(() => {
     if (!results.hidden) return;
     addressInput.value = "";

@@ -1,0 +1,10 @@
+{
+  "name": "home-value-api",
+  "private": true,
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node server.js"
+  }
+}
