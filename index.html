@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Home value · Matthew Villaflor · SERHANT. Texas</title>
+    <meta name="description" content="Compare public home-value sources for one address with Matthew Villaflor, SERHANT. Texas. No signup. Dollar amounts are not shown until a live source is connected.">
+    <meta name="theme-color" content="#001A72">
+    <meta property="og:title" content="Home value · Matthew Villaflor · SERHANT. Texas">
+    <meta property="og:description" content="One address, read across public home-value sources. No signup, and no dollar amount until a live source is connected.">
+    <meta property="og:type" content="website">
+    <link rel="icon" href="assets/mv-logo-black.png" media="(prefers-color-scheme: light)">
+    <link rel="icon" href="assets/mv-logo-white.png" media="(prefers-color-scheme: dark)">
+    <link rel="icon" href="assets/mv-logo-black.png">
+    <link rel="stylesheet" href="assets/styles.css">
+  </head>
+  <body>
+    <a class="skip" href="#address">Skip to address</a>
+
+    <header class="mast">
+      <div class="wrap mast-inner">
+        <a class="brand" href="./">
+          <img src="assets/mv-logo-white.png" width="44" height="44" alt="">
+          <span class="brand-text">
+            <span class="brand-name">Matthew Villaflor</span>
+            <span class="brand-broker">SERHANT. Texas</span>
+          </span>
+        </a>
+        <p class="mast-license">Serhant Texas, LLC · License TX 717893</p>
+      </div>
+    </header>
+
+    <main>
+      <section class="hero" aria-labelledby="hero-title">
+        <div class="wrap hero-inner">
+          <div class="hero-copy">
+            <p class="eyebrow"><span>Home value</span></p>
+            <h1 id="hero-title">Compare public estimates for one address.</h1>
+            <p class="lede">Enter the full street address and press Enter. Each source is listed on its own. Estimates stay pending until a live source is connected.</p>
+
+            <form id="lookup" autocomplete="off">
+              <label for="address">Street address</label>
+              <div class="field-row">
+                <input
+                  id="address"
+                  type="text"
+                  inputmode="text"
+                  autocomplete="off"
+                  autocapitalize="words"
+                  spellcheck="false"
+                  enterkeyhint="search"
+                  maxlength="200"
+                  placeholder="123 Main St, Houston, TX 77002"
+                  aria-describedby="lookup-hint"
+                >
+                <button type="submit">Show sources</button>
+              </div>
+              <p id="lookup-hint" class="hint" role="status"></p>
+            </form>
+
+            <p class="privacy">Nothing you type is stored on this page. Refreshing clears the address.</p>
+            <noscript>
+              <p class="noscript">JavaScript is off, so the source list cannot be shown. Matthew Villaflor can be reached at 713-456-9200 or Matthew@Villaflor.net.</p>
+            </noscript>
+          </div>
+
+          <div class="hero-index">
+            <p class="index-label">Included sources</p>
+            <ul id="source-index" class="source-index">
+              <li>Redfin</li>
+              <li>Homebot</li>
+              <li>Zillow</li>
+              <li>Chase</li>
+              <li>PennyMac</li>
+              <li>Homes.com</li>
+              <li>Rate.com</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section id="results" class="results" hidden aria-live="polite"></section>
+
+      <section class="agent" aria-labelledby="agent-name">
+        <div class="wrap">
+          <div class="agent-card">
+            <img
+              class="agent-photo"
+              src="assets/matthew-villaflor.png"
+              width="300"
+              height="300"
+              alt="Matthew Villaflor"
+            >
+            <div class="agent-details">
+              <div class="agent-name-row">
+                <img class="agent-mark" src="assets/mv-logo-black.png" width="32" height="32" alt="">
+                <h2 id="agent-name">Matthew Villaflor</h2>
+              </div>
+              <p class="agent-broker">SERHANT. Texas</p>
+              <p class="agent-legal">Serhant Texas, LLC · License TX 717893</p>
+              <p class="agent-contact">
+                <a href="tel:+17134569200">713-456-9200</a>
+                <a href="mailto:Matthew@Villaflor.net">Matthew@Villaflor.net</a>
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="wrap">
+        <img class="footer-mark" src="assets/mv-logo-white.png" width="40" height="40" alt="">
+        <p>Online estimates are automated and are not an appraisal. They are not a broker price opinion, a guarantee of value, or a commitment to lend.</p>
+        <p class="eho">
+          <svg class="eho-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="28" height="28" aria-hidden="true" focusable="false">
+            <path fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" d="M5 14.2 16 5l11 9.2"></path>
+            <path fill="none" stroke="currentColor" stroke-width="1.4" d="M8 13.2V27h16V13.2"></path>
+            <path stroke="currentColor" stroke-width="1.4" stroke-linecap="round" d="M12 19.5h8M12 23.5h8"></path>
+          </svg>
+          <span>Equal Housing Opportunity. Serhant Texas, LLC supports the Fair Housing Act and does not discriminate because of race, color, religion, sex, disability, familial status, or national origin.</span>
+        </p>
+        <p>Redfin, Homebot, Zillow, Chase, PennyMac, Homes.com, and Rate.com are named for identification only. Listing a source here does not imply endorsement, sponsorship, or affiliation.</p>
+      </div>
+    </footer>
+
+    <script src="assets/app.js" defer></script>
+  </body>
+</html>
