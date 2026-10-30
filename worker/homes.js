@@ -57,8 +57,23 @@ async function scrapeHomes(address, options = {}) {
       return outcome("unavailable", { error: "Homes.com blocked the lookup." });
     }
     const streetNumber = (address.match(/\d+/) || [""])[0];
-    const value = parseHomesEstimate(text);
-    if (value != null && streetNumber && text.includes(streetNumber)) return outcome("done", { value });
+    const box = page.locator('input[placeholder*="address" i], input[aria-label*="address" i]').first();
+    let pageText = text;
+    if (await box.count()) {
+      await box.click();
+      await box.pressSequentially(address, { delay: 30 });
+      await page.waitForTimeout(Math.min(1200, timeLeft()));
+      await page.keyboard.press("ArrowDown");
+      await page.keyboard.press("Enter");
+      await page.waitForTimeout(Math.min(4000, timeLeft()));
+      pageText = await page.evaluate(() => (document.body && document.body.innerText) || "");
+      if (/claim your home|sign up|email address/i.test(pageText) && parseHomesEstimate(pageText) == null) {
+        return outcome("unavailable", { error: "Homes.com requires a signup to show the estimate." });
+      }
+    }
+    if (BLOCK_RE.test(pageText)) return outcome("unavailable", { error: "Homes.com blocked the lookup." });
+    const value = parseHomesEstimate(pageText);
+    if (value != null && streetNumber && pageText.includes(streetNumber)) return outcome("done", { value });
     return outcome("unavailable", { error: "Homes.com did not show an estimate." });
   } catch (error) {
     const message = String(error && error.message ? error.message : error);

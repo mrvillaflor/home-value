@@ -10,13 +10,19 @@ const RATE_URL = "https://www.rate.com/home-valuation";
 const BLOCK_RE = /access denied|verify you are human|captcha|request blocked|too many requests/i;
 const LEAD_RE = /email address|phone number|get pre-approved|start a refinance/i;
 
+function money(raw) {
+  const value = Number(String(raw).replace(/,/g, ""));
+  if (!Number.isFinite(value) || value < 10000 || value > 100000000) return null;
+  return value;
+}
+
 function outcome(status, extra) {
   return {
     sourceId: "rate",
     status,
     value: extra.value ?? null,
-    low: null,
-    high: null,
+    low: extra.low ?? null,
+    high: extra.high ?? null,
     fetchedAt: new Date().toISOString(),
     error: status === "unavailable" ? extra.error || "No estimate returned" : null,
   };
@@ -24,15 +30,18 @@ function outcome(status, extra) {
 
 function parseRateEstimate(text) {
   const source = String(text || "");
-  const label = source.match(/estimated (?:home )?value|your home is worth|home value estimate/i);
+  const rangeMatch = source.match(/\$\s*([\d,]{4,})\s*[–-]\s*\$\s*([\d,]{4,})/);
+  const low = rangeMatch ? money(rangeMatch[1]) : null;
+  const high = rangeMatch ? money(rangeMatch[2]) : null;
+  const label = source.match(/estimated (?:home )?value|your home is worth/i);
   if (!label) return null;
-  const start = Math.max(0, label.index - 40);
-  const windowText = source.slice(start, label.index + label[0].length + 48);
+  const start = Math.max(0, label.index - 60);
+  const windowText = source.slice(start, label.index + label[0].length + 80);
   const match = windowText.match(/\$\s*(\d{1,3}(?:,\d{3})+|\d{5,9})/);
-  if (!match) return null;
-  const value = Number(match[1].replace(/,/g, ""));
-  if (!Number.isFinite(value) || value < 10000 || value > 100000000) return null;
-  return value;
+  const value = match ? money(match[1]) : null;
+  if (value == null) return null;
+  if (low != null && high != null && low <= value && value <= high) return { value, low, high };
+  return { value, low: null, high: null };
 }
 
 async function scrapeRate(address, options = {}) {
@@ -59,21 +68,23 @@ async function scrapeRate(address, options = {}) {
     await box.scrollIntoViewIfNeeded();
     await box.click();
     await box.fill("");
-    await box.pressSequentially(address, { delay: 25 });
+    await box.pressSequentially(address, { delay: 40 });
     const streetNumber = (address.match(/\d+/) || [""])[0];
-    const option = page.locator(".pac-item, [role='option']").filter({ hasText: streetNumber || address }).first();
-    const appeared = await option.waitFor({ timeout: Math.min(8000, timeLeft()) }).then(() => true).catch(() => false);
-    if (appeared) await option.click();
+    await page.waitForTimeout(Math.min(1500, timeLeft()));
+    await page.keyboard.press("ArrowDown");
+    await page.keyboard.press("Enter");
     const search = page.getByRole("button", { name: "Search home value" });
-    if (await search.count()) await search.click();
+    if (await search.count()) await search.click().catch(() => {});
     await page.waitForTimeout(Math.min(5000, timeLeft()));
+    const skip = page.getByRole("button", { name: /no thanks|not now|skip|maybe later/i });
+    if (await skip.count()) await skip.first().click().catch(() => {});
     const text = await page.evaluate(() => (document.body && document.body.innerText) || "");
     if (BLOCK_RE.test(text)) return outcome("unavailable", { error: "Rate.com blocked the lookup." });
-    const value = parseRateEstimate(text);
-    if (value != null && streetNumber && text.includes(streetNumber)) return outcome("done", { value });
-    if (LEAD_RE.test(text) && value == null) {
-      return outcome("unavailable", { error: "Rate.com did not show an estimate." });
+    const parsed = parseRateEstimate(text);
+    if (parsed && parsed.value != null && streetNumber && text.includes(streetNumber)) {
+      return outcome("done", parsed);
     }
+    if (LEAD_RE.test(text)) return outcome("unavailable", { error: "Rate.com did not show an estimate." });
     return outcome("unavailable", { error: "Rate.com did not show an estimate." });
   } catch (error) {
     const message = String(error && error.message ? error.message : error);

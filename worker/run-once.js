@@ -66,6 +66,7 @@ async function main() {
     chromePath: process.env.CHROME_PATH || "",
     timeoutMs: 40000,
     onResult: async (outcome) => {
+      process.stdout.write(outcome.sourceId + " " + outcome.status + (outcome.value == null ? "" : " " + outcome.value) + "\n");
       if (!callbackUrl) return;
       try {
         await postResult(callbackUrl, secret, sessionId, outcome);
