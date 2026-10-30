@@ -6,14 +6,26 @@
  * If a name changes, also update the identification sentence in the footer.
  *
  * API_BASE is the Render service. Change this one constant if the URL differs.
- * LIVE_SOURCE_ID is the only source the API asks the worker to fetch.
+ * LIVE_SOURCE_IDS are the sources the API asks the worker to fetch.
  *
  * Nothing on this page is written to localStorage, sessionStorage, or a cookie.
  * A refresh starts from an empty address and no results.
  */
 
 const API_BASE = "https://home-value-api-3mvp.onrender.com";
-const LIVE_SOURCE_ID = "homebot";
+const LIVE_SOURCE_IDS = ["homebot", "chase", "realtor", "homes", "rate", "pennymac"];
+const ESTIMATE_LABELS = {
+  homebot: "Homebot estimate",
+  chase: "Chase estimate",
+  realtor: "Realtor.com estimate",
+  homes: "Homes.com estimate",
+  rate: "Rate.com estimate",
+  pennymac: "PennyMac estimate",
+};
+
+function isLiveSource(id) {
+  return LIVE_SOURCE_IDS.includes(id);
+}
 const POLL_MS = 2000;
 const POST_TIMEOUT_MS = 90000;
 const POLL_BUDGET_MS = 180000;
@@ -26,6 +38,7 @@ const SOURCES = [
   { id: "pennymac", name: "PennyMac" },
   { id: "homes", name: "Homes.com" },
   { id: "rate", name: "Rate.com" },
+  { id: "realtor", name: "Realtor.com" },
 ];
 
 const lookupForm = document.querySelector("#lookup");
@@ -127,7 +140,7 @@ function showEstimate(card, source) {
   if (typeof source.low === "number" && typeof source.high === "number") {
     detail.textContent = formatDollars(source.low) + " – " + formatDollars(source.high);
   } else {
-    detail.textContent = "Homebot estimate";
+    detail.textContent = ESTIMATE_LABELS[source.id] || "Estimate";
   }
   card.dataset.state = "done";
 }
@@ -145,7 +158,7 @@ function visitorError(error) {
  * on the placeholder.
  */
 function applySource(card, source) {
-  if (!source || source.id !== LIVE_SOURCE_ID) {
+  if (!source || !isLiveSource(source.id)) {
     showPlaceholder(card);
     return;
   }
@@ -160,7 +173,7 @@ function applySource(card, source) {
   const status = card.querySelector(".source-status");
   const detail = card.querySelector(".source-detail");
   status.textContent = "Loading";
-  detail.textContent = "Looking up Homebot";
+  detail.textContent = "Looking up";
   card.dataset.state = "loading";
 }
 
@@ -196,7 +209,7 @@ function renderLookup(address) {
     card.append(el("p", "source-status", ""));
     card.append(el("p", "source-detail", ""));
 
-    if (source.id === LIVE_SOURCE_ID) {
+    if (isLiveSource(source.id)) {
       const slot = el("div", "shimmer-slot");
       const shimmer = el("div", "shimmer");
       shimmer.setAttribute("aria-hidden", "true");
@@ -255,8 +268,8 @@ async function requestJson(url, options, timeoutMs) {
  *
  * POST /sessions { address } → { sessionId }
  * Then GET /sessions/:id about every 2 seconds for up to 90 seconds.
- * onUpdate is called with each session payload so the live card can fill
- * as soon as Homebot arrives. Other sources are left pending.
+ * onUpdate is called with each session payload so each live card can fill
+ * as soon as that source arrives. The other sources are left pending.
  */
 async function fetchEstimates(address, onUpdate) {
   if (!address || typeof address !== "string") {
@@ -282,10 +295,9 @@ async function fetchEstimates(address, onUpdate) {
   while (Date.now() - started < POLL_BUDGET_MS) {
     latest = await requestJson(API_BASE + "/sessions/" + created.sessionId, { method: "GET" }, 15000);
     if (onUpdate) onUpdate(latest);
-    const live = (latest.sources || []).find((source) => source.id === LIVE_SOURCE_ID);
-    if (live && (live.status === "done" || live.status === "unavailable")) {
-      return latest;
-    }
+    const liveRows = (latest.sources || []).filter((source) => isLiveSource(source.id));
+    const finished = liveRows.length === LIVE_SOURCE_IDS.length && liveRows.every((source) => source.status === "done" || source.status === "unavailable");
+    if (finished) return latest;
     await sleep(POLL_MS);
   }
   return latest;
@@ -311,33 +323,32 @@ lookupForm.addEventListener("submit", async (event) => {
     const session = await fetchEstimates(address, (update) => {
       if (token !== currentRequest) return;
       paintSession(update);
-      const live = (update.sources || []).find((source) => source.id === LIVE_SOURCE_ID);
-      if (live && live.status === "pending") {
-        setNote("Looking up Homebot");
-      }
+      const pending = (update.sources || []).some((source) => isLiveSource(source.id) && source.status === "pending");
+      if (pending) setNote("Looking up Homebot, Chase, Realtor.com, Homes.com, Rate.com, and PennyMac");
     });
     if (token !== currentRequest) return;
 
-    const live = session && (session.sources || []).find((source) => source.id === LIVE_SOURCE_ID);
-    if (live && live.status === "done") {
+    const liveRows = session && (session.sources || []).filter((source) => isLiveSource(source.id));
+    const finished = liveRows && liveRows.length === LIVE_SOURCE_IDS.length && liveRows.every((source) => source.status === "done" || source.status === "unavailable");
+    if (finished) {
       paintSession(session);
-      setNote("Homebot returned an estimate. The other sources are not connected yet.");
-    } else if (live && live.status === "unavailable") {
-      paintSession(session);
-      setNote("Homebot did not return an estimate. The other sources are not connected yet.");
+      setNote("The live sources have been checked. The others are not connected yet.");
     } else {
-      const card = results.querySelector('[data-source="' + LIVE_SOURCE_ID + '"]');
-      if (card) showUnavailable(card, "The estimate did not arrive in time.");
-      setNote("Homebot did not respond in time. No dollar amount is shown.");
+      results.querySelectorAll(".source").forEach((card) => {
+        if (isLiveSource(card.dataset.source) && card.dataset.state === "loading") {
+          showUnavailable(card, "The estimate did not arrive in time.");
+        }
+      });
+      setNote("A live source did not respond in time. No dollar amount was added for it.");
     }
     results.setAttribute("aria-busy", "false");
   } catch (error) {
     if (token !== currentRequest) return;
-    const card = results.querySelector('[data-source="' + LIVE_SOURCE_ID + '"]');
     const timedOut = error && error.name === "AbortError";
-    if (card) {
+    results.querySelectorAll(".source").forEach((card) => {
+      if (!isLiveSource(card.dataset.source)) return;
       showUnavailable(card, timedOut ? "The server is still waking up. Try the address again." : "The lookup service did not respond.");
-    }
+    });
     setNote(timedOut ? "The server did not wake up in time. No dollar amount is shown." : "The lookup service did not respond. No dollar amount is shown.");
     results.setAttribute("aria-busy", "false");
   }
@@ -346,15 +357,7 @@ lookupForm.addEventListener("submit", async (event) => {
 writeSourceIndex();
 clearPage();
 
-window.addEventListener("pageshow", (event) => {
-  if (event.persisted) {
-    clearPage();
-    writeSourceIndex();
-    return;
-  }
-  window.setTimeout(() => {
-    if (!results.hidden) return;
-    addressInput.value = "";
-    hint.textContent = "";
-  }, 0);
+window.addEventListener("pageshow", () => {
+  clearPage();
+  writeSourceIndex();
 });

@@ -1,5 +1,6 @@
-# One Homebot lookup per dispatch. Runs are independent, so several
-# addresses can be in flight at once. There is no shared concurrency group.
+# One dispatch looks up Homebot, Chase, and Realtor.com together.
+# They run in parallel inside this single job so Playwright starts once.
+# Separate address lookups are not queued behind each other.
 name: Lookup
 
 on:
@@ -28,7 +29,7 @@ permissions:
 jobs:
   lookup:
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    timeout-minutes: 6
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -54,7 +55,7 @@ jobs:
         working-directory: worker
         run: npx playwright install --with-deps chromium
 
-      - name: Look up Homebot
+      - name: Look up live sources
         working-directory: worker
         env:
           ADDRESS: ${{ inputs.address }}

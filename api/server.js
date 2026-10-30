@@ -6,7 +6,8 @@
  * POST /callbacks         worker result, Bearer WORKER_SECRET
  * GET  /health
  *
- * Only Homebot is sent to the worker. The other sources stay pending.
+ * One lookup run checks Homebot, Chase, and Realtor.com. The other
+ * sources stay pending.
  * Nothing is written to disk. Render's free instance can forget this
  * memory whenever it sleeps.
  */
@@ -24,7 +25,7 @@ const GITHUB_REPO = process.env.GITHUB_REPO || "mrvillaflor/home-value";
 const GITHUB_WORKFLOW = process.env.GITHUB_WORKFLOW || "lookup.yml";
 const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || "https://mrvillaflor.github.io";
 const DAILY_CAP = Number(process.env.DAILY_CAP || 100);
-const LIVE_SOURCE_ID = "homebot";
+const LIVE_SOURCE_IDS = ["homebot", "chase", "realtor", "homes", "rate", "pennymac"];
 const limiter = createLimiter({
   dailyCap: Number.isFinite(DAILY_CAP) && DAILY_CAP > 0 ? DAILY_CAP : 100,
 });
@@ -37,6 +38,7 @@ const SOURCES = [
   { id: "pennymac", name: "PennyMac" },
   { id: "homes", name: "Homes.com" },
   { id: "rate", name: "Rate.com" },
+  { id: "realtor", name: "Realtor.com" },
 ];
 
 const sessions = new Map();
@@ -194,14 +196,16 @@ function normalizeResult(body) {
 }
 
 function markUnavailable(session, error) {
-  markSource(session, LIVE_SOURCE_ID, {
-    status: "unavailable",
-    value: null,
-    low: null,
-    high: null,
-    fetchedAt: new Date().toISOString(),
-    error,
-  });
+  for (const sourceId of LIVE_SOURCE_IDS) {
+    markSource(session, sourceId, {
+      status: "unavailable",
+      value: null,
+      low: null,
+      high: null,
+      fetchedAt: new Date().toISOString(),
+      error,
+    });
+  }
 }
 
 function dispatchHttpWorker(session, callbackUrl) {
@@ -217,7 +221,7 @@ function dispatchHttpWorker(session, callbackUrl) {
       sessionId: session.id,
       address: session.address,
       callbackUrl,
-      sourceId: LIVE_SOURCE_ID,
+      sourceId: LIVE_SOURCE_IDS.join(","),
     }),
     signal: controller.signal,
   })
@@ -257,7 +261,7 @@ function dispatchWorker(req, session) {
     inputs: {
       sessionId: session.id,
       address: session.address,
-      sourceId: LIVE_SOURCE_ID,
+      sourceId: LIVE_SOURCE_IDS.join(","),
       callbackUrl,
     },
   })
@@ -282,7 +286,7 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (req.method === "GET" && url.pathname === "/health") {
-    send(res, 200, { ok: true });
+    send(res, 200, { ok: true, live: LIVE_SOURCE_IDS });
     return;
   }
 
@@ -352,8 +356,8 @@ const server = http.createServer(async (req, res) => {
       send(res, 404, { error: "Session not found" });
       return;
     }
-    if (body.sourceId !== LIVE_SOURCE_ID) {
-      send(res, 400, { error: "Only the live source can be updated." });
+    if (!LIVE_SOURCE_IDS.includes(body.sourceId)) {
+      send(res, 400, { error: "Only a live source can be updated." });
       return;
     }
     const result = normalizeResult(body);
@@ -361,7 +365,7 @@ const server = http.createServer(async (req, res) => {
       send(res, 400, { error: "Result needs status done or unavailable, and a real value when done." });
       return;
     }
-    markSource(session, LIVE_SOURCE_ID, result);
+    markSource(session, body.sourceId, result);
     send(res, 204, null);
     return;
   }

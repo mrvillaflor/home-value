@@ -6,7 +6,7 @@
 
 const http = require("http");
 const crypto = require("crypto");
-const { scrapeHomebot } = require("./homebot");
+const { parseSourceIds, runSources, LIVE_SOURCE_IDS } = require("./live");
 
 const PORT = Number(process.env.PORT) || 8080;
 const WORKER_SECRET = process.env.WORKER_SECRET || "";
@@ -85,7 +85,7 @@ async function postCallback(job, outcome) {
     },
     body: JSON.stringify({
       sessionId: job.sessionId,
-      sourceId: "homebot",
+      sourceId: outcome.sourceId,
       status: outcome.status,
       value: outcome.value,
       low: outcome.low,
@@ -101,12 +101,14 @@ async function postCallback(job, outcome) {
 }
 
 async function runJob(job) {
-  const outcome = await scrapeHomebot(job.address, {
+  const outcomes = await runSources(job.address, job.sourceIds, {
     chromePath: CHROME_PATH,
     timeoutMs: 40000,
   });
-  await postCallback(job, outcome);
-  process.stdout.write("job " + job.sessionId + " " + outcome.status + "\n");
+  for (const outcome of outcomes) {
+    await postCallback(job, outcome);
+    process.stdout.write("job " + job.sessionId + " " + outcome.sourceId + " " + outcome.status + "\n");
+  }
 }
 
 const server = http.createServer(async (req, res) => {
@@ -138,14 +140,16 @@ const server = http.createServer(async (req, res) => {
       send(res, 400, { error: "sessionId, address, and callbackUrl are required." });
       return;
     }
-    if (body.sourceId !== "homebot") {
-      send(res, 400, { error: "This worker only looks up Homebot." });
+    const sourceIds = parseSourceIds(body.sourceId || LIVE_SOURCE_IDS.join(","));
+    if (sourceIds.some((id) => !LIVE_SOURCE_IDS.includes(id))) {
+      send(res, 400, { error: "This worker only looks up the live sources." });
       return;
     }
     const job = {
       sessionId: String(body.sessionId),
       address,
       callbackUrl: body.callbackUrl,
+      sourceIds,
     };
     send(res, 202, { accepted: true });
     enqueue(() => runJob(job)).catch((error) => {
