@@ -33,10 +33,10 @@ function parseRateEstimate(text) {
   const rangeMatch = source.match(/\$\s*([\d,]{4,})\s*[–-]\s*\$\s*([\d,]{4,})/);
   const low = rangeMatch ? money(rangeMatch[1]) : null;
   const high = rangeMatch ? money(rangeMatch[2]) : null;
-  const label = source.match(/estimated (?:home )?value|your home is worth/i);
+  const label = source.match(/home value estimate|estimated (?:home )?value|your home is worth/i);
   if (!label) return null;
-  const start = Math.max(0, label.index - 60);
-  const windowText = source.slice(start, label.index + label[0].length + 80);
+  const start = Math.max(0, label.index - 80);
+  const windowText = source.slice(start, label.index + label[0].length + 140);
   const match = windowText.match(/\$\s*(\d{1,3}(?:,\d{3})+|\d{5,9})/);
   const value = match ? money(match[1]) : null;
   if (value == null) return null;
