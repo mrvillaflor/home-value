@@ -6,7 +6,7 @@
  * POST /callbacks         worker result, Bearer WORKER_SECRET
  * GET  /health
  *
- * Only Redfin is sent to the worker. The other sources stay pending.
+ * Only Homebot is sent to the worker. The other sources stay pending.
  * Nothing is written to disk. Render's free instance can forget this
  * memory whenever it sleeps.
  */
@@ -17,7 +17,7 @@ const crypto = require("crypto");
 const PORT = Number(process.env.PORT) || 10000;
 const WORKER_URL = (process.env.WORKER_URL || "").replace(/\/$/, "");
 const WORKER_SECRET = process.env.WORKER_SECRET || "";
-const LIVE_SOURCE_ID = "redfin";
+const LIVE_SOURCE_ID = "homebot";
 
 const SOURCES = [
   { id: "redfin", name: "Redfin" },

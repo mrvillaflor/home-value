@@ -6,7 +6,7 @@
 
 const http = require("http");
 const crypto = require("crypto");
-const { scrapeRedfin } = require("./scrape");
+const { scrapeHomebot } = require("./homebot");
 
 const PORT = Number(process.env.PORT) || 8080;
 const WORKER_SECRET = process.env.WORKER_SECRET || "";
@@ -85,7 +85,7 @@ async function postCallback(job, outcome) {
     },
     body: JSON.stringify({
       sessionId: job.sessionId,
-      sourceId: "redfin",
+      sourceId: "homebot",
       status: outcome.status,
       value: outcome.value,
       low: outcome.low,
@@ -101,7 +101,7 @@ async function postCallback(job, outcome) {
 }
 
 async function runJob(job) {
-  const outcome = await scrapeRedfin(job.address, {
+  const outcome = await scrapeHomebot(job.address, {
     chromePath: CHROME_PATH,
     timeoutMs: 40000,
   });
@@ -138,8 +138,8 @@ const server = http.createServer(async (req, res) => {
       send(res, 400, { error: "sessionId, address, and callbackUrl are required." });
       return;
     }
-    if (body.sourceId && body.sourceId !== "redfin") {
-      send(res, 400, { error: "This worker only looks up Redfin." });
+    if (body.sourceId !== "homebot") {
+      send(res, 400, { error: "This worker only looks up Homebot." });
       return;
     }
     const job = {

@@ -13,7 +13,7 @@
  */
 
 const API_BASE = "https://home-value-api.onrender.com";
-const LIVE_SOURCE_ID = "redfin";
+const LIVE_SOURCE_ID = "homebot";
 const POLL_MS = 2000;
 const POST_TIMEOUT_MS = 75000;
 const POLL_BUDGET_MS = 90000;
@@ -127,7 +127,7 @@ function showEstimate(card, source) {
   if (typeof source.low === "number" && typeof source.high === "number") {
     detail.textContent = formatDollars(source.low) + " – " + formatDollars(source.high);
   } else {
-    detail.textContent = "Redfin Estimate";
+    detail.textContent = "Homebot estimate";
   }
   card.dataset.state = "done";
 }
@@ -160,7 +160,7 @@ function applySource(card, source) {
   const status = card.querySelector(".source-status");
   const detail = card.querySelector(".source-detail");
   status.textContent = "Loading";
-  detail.textContent = "Checking Redfin";
+  detail.textContent = "Checking Homebot";
   card.dataset.state = "loading";
 }
 
@@ -180,7 +180,7 @@ function renderLookup(address) {
     el(
       "p",
       "results-note",
-      "Waking up the server. This often takes about a minute. Redfin is the source being checked."
+      "Waking up the server. This often takes about a minute. Homebot is the source being checked."
     )
   );
 
@@ -256,7 +256,7 @@ async function requestJson(url, options, timeoutMs) {
  * POST /sessions { address } → { sessionId }
  * Then GET /sessions/:id about every 2 seconds for up to 90 seconds.
  * onUpdate is called with each session payload so the live card can fill
- * as soon as Redfin arrives. Other sources are left pending.
+ * as soon as Homebot arrives. Other sources are left pending.
  */
 async function fetchEstimates(address, onUpdate) {
   if (!address || typeof address !== "string") {
@@ -313,7 +313,7 @@ lookupForm.addEventListener("submit", async (event) => {
       paintSession(update);
       const live = (update.sources || []).find((source) => source.id === LIVE_SOURCE_ID);
       if (live && live.status === "pending") {
-        setNote("Checking Redfin. The other sources stay pending.");
+        setNote("Checking Homebot. The other sources stay pending.");
       }
     });
     if (token !== currentRequest) return;
@@ -321,14 +321,14 @@ lookupForm.addEventListener("submit", async (event) => {
     const live = session && (session.sources || []).find((source) => source.id === LIVE_SOURCE_ID);
     if (live && live.status === "done") {
       paintSession(session);
-      setNote("Redfin returned an estimate. The other sources are not connected yet.");
+      setNote("Homebot returned an estimate. The other sources are not connected yet.");
     } else if (live && live.status === "unavailable") {
       paintSession(session);
-      setNote("Redfin did not return an estimate. The other sources are not connected yet.");
+      setNote("Homebot did not return an estimate. The other sources are not connected yet.");
     } else {
       const card = results.querySelector('[data-source="' + LIVE_SOURCE_ID + '"]');
       if (card) showUnavailable(card, "The estimate did not arrive in time.");
-      setNote("Redfin did not respond in time. No dollar amount is shown.");
+      setNote("Homebot did not respond in time. No dollar amount is shown.");
     }
     results.setAttribute("aria-busy", "false");
   } catch (error) {
