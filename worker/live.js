@@ -8,7 +8,6 @@ const { scrapeChase } = require("./chase");
 const { scrapeRealtor } = require("./realtor");
 const { scrapeHomes } = require("./homes");
 const { scrapeRate } = require("./rate");
-const { scrapePennyMac } = require("./pennymac");
 
 const SCRAPERS = {
   homebot: scrapeHomebot,
@@ -16,10 +15,9 @@ const SCRAPERS = {
   realtor: scrapeRealtor,
   homes: scrapeHomes,
   rate: scrapeRate,
-  pennymac: scrapePennyMac,
 };
 
-const LIVE_SOURCE_IDS = ["homebot", "chase", "realtor", "homes", "rate", "pennymac"];
+const LIVE_SOURCE_IDS = ["homebot", "chase", "realtor", "homes", "rate"];
 
 function parseSourceIds(value) {
   const raw = String(value || LIVE_SOURCE_IDS.join(","));
