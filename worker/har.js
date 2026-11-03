@@ -220,16 +220,20 @@ function noteYearSignals(html) {
         name: graph.name,
         keys: Object.keys(graph),
         yearish,
+        description: String(graph.description || "").replace(/\d{5,}/g, "#").slice(0, 300),
         measured: graph.variableMeasured || null,
       });
     }
   }
-  const text = visibleText(html);
+  const text = visibleText(html).replace(/\d{5,}/g, "#");
+  const snippets = [];
+  const yearRe = /.{0,45}\b20\d{2}\b.{0,45}/g;
+  let yearMatch;
+  while ((yearMatch = yearRe.exec(text)) && snippets.length < 8) snippets.push(yearMatch[0]);
   process.stderr.write("har-year " + JSON.stringify({
     datasets,
+    snippets,
     assessed: assessedByYear(html).slice(0, 4),
-    hasAssessed: text.includes("Assessed Value"),
-    hasTaxYear: text.includes("Tax Year"),
   }) + "\n");
 }
 
