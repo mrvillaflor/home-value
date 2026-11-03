@@ -1,6 +1,6 @@
 /*
- * Live sources run together in one process. Each scraper opens its own
- * browser. One failure does not cancel the others.
+ * Live sources run together in one process. One failure does not cancel
+ * the others.
  */
 
 const { scrapeHomebot } = require("./homebot");

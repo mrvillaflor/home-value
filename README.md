@@ -56,7 +56,7 @@ The workflow file has to be on `main` before the first dispatch will succeed. Pu
 
 `.github/workflows/lookup.yml` runs on `ubuntu-latest` for up to 6 minutes. It installs the worker, caches npm and the Playwright Chromium build, runs `worker/run-once.js` once, and posts each source result with `Authorization: Bearer` the `WORKER_SECRET` repository secret. The five live sources run at the same time inside that job. Separate address lookups are not queued behind each other. The address is a workflow input, so on this public repo it can still appear on the Actions run page. The script masks it in the log and does not print it. Leave Actions debug logging off.
 
-Each scraper opens one fresh browser, looks up only the public address page, and posts its own result as soon as it finishes. None of them type an email, name, phone, or password, and none submit a signup or lead form. A signup wall, a bot block, or a missing figure is Unavailable. PennyMac is not launched.
+Homebot, Chase, and Homes.com each open one fresh browser and look up only the public address page. Rate.com asks `https://www.rate.com/api/home-valuation` when the address has a street, city, state, and ZIP, and uses the page only if that request cannot be made. Realtor.com asks the public suggest service, then opens the matching property page. Each source posts its own result as soon as it finishes. None of them type an email, name, phone, or password, and none submit a signup or lead form. A signup wall, a bot block, or a missing figure is Unavailable. PennyMac is not launched.
 
 `worker/scrape.js` still contains the Redfin scraper. Nothing calls it. Redfin stays Pending on the page.
 
