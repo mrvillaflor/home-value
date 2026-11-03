@@ -198,6 +198,16 @@ function bracket(value, low, high) {
   return { low: null, high: null };
 }
 
+function noteYearSignals(html) {
+  const text = visibleText(html).replace(/\d{5,}/g, "#");
+  const phrases = ["Assessed Value", "Tax Year", "Market Value Per Appraisal", "Appraisal District Valuation"];
+  const hits = phrases.map((phrase) => {
+    const index = text.indexOf(phrase);
+    return index < 0 ? null : text.slice(Math.max(0, index - 30), index + 90);
+  }).filter(Boolean);
+  process.stderr.write("har-year " + JSON.stringify({ hits, years: assessedByYear(html).slice(0, 4) }) + "\n");
+}
+
 function parseHarPage(html) {
   const datasets = readDatasets(html);
   const years = assessedByYear(html);
@@ -300,7 +310,7 @@ async function scrapeHar(address, options = {}) {
     if (/timeout/i.test(message)) return outcome("unavailable", { error: "HAR.com did not respond in time." });
     return outcome("unavailable", { error: "HAR.com did not show an estimate." });
   }
-  if (found && found.blocked) return outcome("unavailable", { error: "HAR.com blocked the lookup." });
+  if (found && found.blocked) return outcome("unavailable", { error: "HAR.com blocked the address search." });
   if (!found) return outcome("unavailable", { error: "HAR.com did not find this home." });
 
   let page;
@@ -312,8 +322,9 @@ async function scrapeHar(address, options = {}) {
     return outcome("unavailable", { error: "HAR.com did not show an estimate." });
   }
   if (page.blocked || page.status !== 200) {
-    return outcome("unavailable", { error: "HAR.com blocked the lookup." });
+    return outcome("unavailable", { error: "HAR.com blocked the property page." });
   }
+  noteYearSignals(page.body);
   const estimates = parseHarPage(page.body);
   if (!estimates.length) return outcome("unavailable", { error: "HAR.com did not show an estimate." });
   const primary = estimates.find((item) => item.name === "ICE") || estimates[0];
