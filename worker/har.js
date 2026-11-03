@@ -199,13 +199,38 @@ function bracket(value, low, high) {
 }
 
 function noteYearSignals(html) {
-  const text = visibleText(html).replace(/\d{5,}/g, "#");
-  const phrases = ["Assessed Value", "Tax Year", "Market Value Per Appraisal", "Appraisal District Valuation"];
-  const hits = phrases.map((phrase) => {
-    const index = text.indexOf(phrase);
-    return index < 0 ? null : text.slice(Math.max(0, index - 30), index + 90);
-  }).filter(Boolean);
-  process.stderr.write("har-year " + JSON.stringify({ hits, years: assessedByYear(html).slice(0, 4) }) + "\n");
+  const datasets = [];
+  const pattern = /<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
+  let match;
+  while ((match = pattern.exec(String(html || "")))) {
+    let data;
+    try {
+      data = JSON.parse(match[1]);
+    } catch (error) {
+      continue;
+    }
+    for (const graph of graphsFrom(data)) {
+      if (!graph || graph["@type"] !== "Dataset" || !/Appraisal/i.test(String(graph.name || ""))) continue;
+      const yearish = {};
+      for (const key of Object.keys(graph)) {
+        const value = graph[key];
+        if (typeof value === "string" && value.length < 80 && /\b(19|20)\d{2}\b/.test(value)) yearish[key] = value;
+      }
+      datasets.push({
+        name: graph.name,
+        keys: Object.keys(graph),
+        yearish,
+        measured: graph.variableMeasured || null,
+      });
+    }
+  }
+  const text = visibleText(html);
+  process.stderr.write("har-year " + JSON.stringify({
+    datasets,
+    assessed: assessedByYear(html).slice(0, 4),
+    hasAssessed: text.includes("Assessed Value"),
+    hasTaxYear: text.includes("Tax Year"),
+  }) + "\n");
 }
 
 function parseHarPage(html) {
