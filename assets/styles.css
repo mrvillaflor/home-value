@@ -150,10 +150,9 @@ input {
 
 .brand-broker {
   font-size: 0.78rem;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
+  letter-spacing: 0.02em;
   color: rgba(255, 255, 255, 0.78);
-  line-height: 1.4;
+  line-height: 1.35;
 }
 
 .brand:hover .brand-name,
@@ -515,10 +514,10 @@ button[type="submit"]:active {
 .agent-broker {
   margin: 4px 0 0;
   color: var(--navy);
-  font-size: 0.78rem;
+  font-size: 0.84rem;
   font-weight: 500;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
+  letter-spacing: 0.01em;
+  line-height: 1.35;
 }
 
 .agent-legal {
@@ -558,6 +557,12 @@ button[type="submit"]:active {
 .footer-mark {
   width: 40px;
   height: 40px;
+}
+
+.site-footer .footer-brand {
+  color: var(--white);
+  font-size: 0.95rem;
+  letter-spacing: 0.01em;
 }
 
 .site-footer p {

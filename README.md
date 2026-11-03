@@ -1,6 +1,6 @@
 # Home value
 
-Static draft of a public home-value page for Matthew Villaflor, SERHANT. Texas (Serhant Texas, LLC, license TX 717893).
+Static draft of a public home-value page for Matthew Villaflor, The Kinne Group | SERHANT. (Serhant Texas, LLC, license TX 717893).
 
 The page itself has no build step. Host the repository root as a static site (GitHub Pages, Render, Cloudflare Pages, or any other file host). The API and the worker are separate services, deployed from `api/` and `worker/`.
 
