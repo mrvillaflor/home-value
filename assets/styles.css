@@ -464,6 +464,45 @@ button[type="submit"]:active {
   font-size: 0.95rem;
 }
 
+.har-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 12px;
+}
+
+.har-line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  align-items: baseline;
+  margin: 8px 0 0;
+}
+
+.har-name {
+  color: var(--navy);
+  font-size: 0.78rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+}
+
+.har-value {
+  color: var(--navy);
+  font-family: var(--serif);
+  font-size: 1.35rem;
+  font-weight: 400;
+  line-height: 1.15;
+}
+
+.har-lines .source-detail {
+  margin-top: 0;
+}
+
+.har-lines a {
+  color: var(--navy);
+  text-underline-offset: 3px;
+}
+
 .agent {
   background: var(--warm);
   padding: 36px 0 72px;

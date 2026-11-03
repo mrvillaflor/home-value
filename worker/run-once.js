@@ -33,6 +33,8 @@ async function postResult(callbackUrl, secret, sessionId, outcome) {
       high: outcome.high,
       fetchedAt: outcome.fetchedAt,
       error: outcome.error,
+      estimates: outcome.estimates || null,
+      url: outcome.url || null,
     }),
     signal: AbortSignal.timeout(20000),
   });
@@ -84,6 +86,7 @@ async function main() {
     low: outcome.low,
     high: outcome.high,
     error: outcome.error,
+    estimates: outcome.estimates || null,
   }))) + "\n");
 
   if (callbackFailed) process.exit(1);

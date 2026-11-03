@@ -25,7 +25,7 @@ const GITHUB_REPO = process.env.GITHUB_REPO || "mrvillaflor/home-value";
 const GITHUB_WORKFLOW = process.env.GITHUB_WORKFLOW || "lookup.yml";
 const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || "https://mrvillaflor.github.io";
 const DAILY_CAP = Number(process.env.DAILY_CAP || 100);
-const LIVE_SOURCE_IDS = ["homebot", "chase", "homes", "rate"];
+const LIVE_SOURCE_IDS = ["homebot", "chase", "homes", "rate", "har"];
 const limiter = createLimiter({
   dailyCap: Number.isFinite(DAILY_CAP) && DAILY_CAP > 0 ? DAILY_CAP : 100,
 });
@@ -37,6 +37,7 @@ const SOURCES = [
   { id: "chase", name: "Chase" },
   { id: "homes", name: "Homes.com" },
   { id: "rate", name: "Rate.com" },
+  { id: "har", name: "HAR.com" },
 ];
 
 const sessions = new Map();
@@ -190,7 +191,67 @@ function normalizeResult(body) {
     high: status === "done" ? high : null,
     fetchedAt: new Date().toISOString(),
     error: status === "unavailable" ? error || "No estimate returned" : null,
+    estimates: status === "done" ? normalizeEstimates(body.estimates) : null,
+    url: status === "done" ? normalizeHarUrl(body.url) : null,
   };
+}
+
+function roundMoney(raw) {
+  if (typeof raw !== "number" || !Number.isFinite(raw)) return null;
+  const value = Math.round(raw);
+  if (value < 10000 || value > 100000000) return null;
+  return value;
+}
+
+function normalizeEstimates(rows) {
+  if (!Array.isArray(rows)) return null;
+  const allowed = ["ICE", "Cotality", "Appraisal District"];
+  const estimates = [];
+  for (const row of rows.slice(0, 3)) {
+    if (!row || !allowed.includes(row.name)) continue;
+    const value = roundMoney(row.value);
+    if (value == null) continue;
+    let low = null;
+    let high = null;
+    if (typeof row.low === "number" && typeof row.high === "number") {
+      low = Math.round(Math.min(row.low, row.high));
+      high = Math.round(Math.max(row.low, row.high));
+      if (low > value || high < value || low < 10000 || high > 100000000) {
+        low = null;
+        high = null;
+      }
+    }
+    let confidence = null;
+    if (typeof row.confidence === "number" && row.confidence >= 1 && row.confidence <= 100) {
+      confidence = Math.round(row.confidence);
+    }
+    let year = null;
+    if (typeof row.year === "number" && row.year >= 1990 && row.year <= 2099) year = Math.round(row.year);
+    const prior = [];
+    if (Array.isArray(row.prior)) {
+      for (const item of row.prior.slice(0, 4)) {
+        const priorValue = roundMoney(item && item.value);
+        const priorYear = item && typeof item.year === "number" ? Math.round(item.year) : null;
+        if (priorValue == null || priorYear == null || priorYear < 1990 || priorYear > 2099) continue;
+        prior.push({ year: priorYear, value: priorValue });
+      }
+    }
+    estimates.push({ name: row.name, value, low, high, confidence, year, prior });
+  }
+  return estimates.length ? estimates : null;
+}
+
+function normalizeHarUrl(value) {
+  if (typeof value !== "string") return null;
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "https:" || url.hostname !== "www.har.com") return null;
+    if (!/^\/homedetail\/[a-z0-9-]+\/\d+\/?$/i.test(url.pathname)) return null;
+    if (url.search || url.hash) return null;
+    return "https://www.har.com" + url.pathname.replace(/\/$/, "");
+  } catch (error) {
+    return null;
+  }
 }
 
 function markUnavailable(session, error) {

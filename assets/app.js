@@ -13,12 +13,13 @@
  */
 
 const API_BASE = "https://home-value-api-3mvp.onrender.com";
-const LIVE_SOURCE_IDS = ["homebot", "chase", "homes", "rate"];
+const LIVE_SOURCE_IDS = ["homebot", "chase", "homes", "rate", "har"];
 const ESTIMATE_LABELS = {
   homebot: "Homebot estimate",
   chase: "Chase estimate",
   homes: "Homes.com estimate",
   rate: "Rate.com estimate",
+  har: "HAR.com estimate",
 };
 
 function isLiveSource(id) {
@@ -35,6 +36,7 @@ const SOURCES = [
   { id: "chase", name: "Chase" },
   { id: "homes", name: "Homes.com" },
   { id: "rate", name: "Rate.com" },
+  { id: "har", name: "HAR.com" },
 ];
 
 const lookupForm = document.querySelector("#lookup");
@@ -128,16 +130,72 @@ function showUnavailable(card, detail) {
 function showEstimate(card, source) {
   const slot = card.querySelector(".shimmer-slot");
   if (slot) slot.remove();
+  const lines = card.querySelector(".har-lines");
+  if (lines) lines.remove();
   const kicker = card.querySelector(".source-kicker");
   const status = card.querySelector(".source-status");
   const detail = card.querySelector(".source-detail");
+  if (source.id === "har" && Array.isArray(source.estimates) && source.estimates.length) {
+    showHarEstimates(card, source);
+    return;
+  }
   if (kicker) kicker.textContent = "Estimate";
   status.textContent = formatDollars(source.value);
+  status.hidden = false;
   if (typeof source.low === "number" && typeof source.high === "number") {
     detail.textContent = formatDollars(source.low) + " – " + formatDollars(source.high);
   } else {
     detail.textContent = ESTIMATE_LABELS[source.id] || "Estimate";
   }
+  card.dataset.state = "done";
+}
+
+function harMoney(value) {
+  return formatDollars(value);
+}
+
+function showHarEstimates(card, source) {
+  const kicker = card.querySelector(".source-kicker");
+  const status = card.querySelector(".source-status");
+  const detail = card.querySelector(".source-detail");
+  if (kicker) kicker.textContent = "Estimates";
+  status.textContent = "";
+  status.hidden = true;
+  detail.textContent = "";
+  const lines = el("div", "har-lines");
+  source.estimates.forEach((row) => {
+    const line = el("p", "har-line");
+    const name = el("span", "har-name", row.name + ":");
+    let amount = harMoney(row.value);
+    if (row.name === "Appraisal District") {
+      amount += " (" + (Number.isInteger(row.year) ? String(row.year) : "year not listed") + ")";
+    }
+    const value = el("span", "har-value", amount);
+    line.append(name, value);
+    lines.append(line);
+    const notes = [];
+    if (typeof row.low === "number" && typeof row.high === "number") {
+      notes.push(harMoney(row.low) + " – " + harMoney(row.high));
+    }
+    if (typeof row.confidence === "number") notes.push(String(row.confidence) + "%");
+    if (notes.length) lines.append(el("p", "source-detail", notes.join(" · ")));
+    if (row.name === "Appraisal District" && Array.isArray(row.prior)) {
+      row.prior.forEach((item) => {
+        if (!item || !Number.isInteger(item.year) || typeof item.value !== "number") return;
+        lines.append(el("p", "source-detail", String(item.year) + ": " + harMoney(item.value)));
+      });
+    }
+  });
+  if (typeof source.url === "string") {
+    const credit = el("p", "source-detail");
+    const link = el("a", null, "HAR.com");
+    link.href = source.url;
+    link.rel = "noopener noreferrer";
+    link.target = "_blank";
+    credit.append(link);
+    lines.append(credit);
+  }
+  detail.before(lines);
   card.dataset.state = "done";
 }
 
@@ -320,7 +378,7 @@ lookupForm.addEventListener("submit", async (event) => {
       if (token !== currentRequest) return;
       paintSession(update);
       const pending = (update.sources || []).some((source) => isLiveSource(source.id) && source.status === "pending");
-      if (pending) setNote("Looking up Homebot, Chase, Homes.com, and Rate.com");
+      if (pending) setNote("Looking up Homebot, Chase, Homes.com, Rate.com, and HAR.com");
     });
     if (token !== currentRequest) return;
 

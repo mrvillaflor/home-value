@@ -24,11 +24,11 @@ The page itself has no build step. Host the repository root as a static site (Gi
 
 The source list lives in one array in `assets/app.js`. The hero index and the results grid both render from that array, and the grid wraps to however many entries it contains.
 
-Submitting a full street address creates a session on the API and polls it for about three minutes. The page says "Waking up the server" while Render starts, then names the live sources while GitHub Actions runs. Homebot, Chase, Homes.com, and Rate.com are checked together. Redfin and Zillow stay Pending. Realtor.com is off: its property page is blocked from GitHub Actions, so it cannot return a value. `worker/realtor.js` stays in the repo. PennyMac is off: its estimator verifies a Google reCAPTCHA token server-side and cannot return a free estimate. `worker/pennymac.js` stays in the repo so it can be turned back on later. A signup wall, a bot block, or a missing figure is Unavailable. The page does not invent a dollar amount. Nothing is saved in `localStorage` or `sessionStorage`, and the address is not kept in the URL. Refreshing the page starts blank.
+Submitting a full street address creates a session on the API and polls it for about three minutes. The page says "Waking up the server" while Render starts, then names the live sources while GitHub Actions runs. Homebot, Chase, Homes.com, Rate.com, and HAR.com are checked together. Redfin and Zillow stay Pending. Realtor.com is off: its property page is blocked from GitHub Actions, so it cannot return a value. `worker/realtor.js` stays in the repo. PennyMac is off: its estimator verifies a Google reCAPTCHA token server-side and cannot return a free estimate. `worker/pennymac.js` stays in the repo so it can be turned back on later. A signup wall, a bot block, or a missing figure is Unavailable. The page does not invent a dollar amount. Nothing is saved in `localStorage` or `sessionStorage`, and the address is not kept in the URL. Refreshing the page starts blank.
 
 `API_BASE` in `assets/app.js` is `https://home-value-api-3mvp.onrender.com`. The Blueprint service name is still `home-value-api`; Render assigned the `-3mvp` suffix on the live URL.
 
-Each new session asks GitHub to run `.github/workflows/lookup.yml` once. That one job opens a separate browser for every live source at the same time, and each source posts its result as soon as it finishes. One run uses fewer Actions minutes than four separate dispatches, and the wait is the slowest source rather than the sum. The API allows 5 lookups per IP every 10 minutes and a global cap of 100 per day (`DAILY_CAP`). Those counters live in memory, so they reset when the free Render instance sleeps or restarts. A new session never reuses an older result. Set `WORKER_URL` only if you want the API to call an HTTP worker instead of Actions.
+Each new session asks GitHub to run `.github/workflows/lookup.yml` once. That one job opens a separate browser for every live source at the same time, and each source posts its result as soon as it finishes. One run uses fewer Actions minutes than five separate dispatches, and the wait is the slowest source rather than the sum. The API allows 5 lookups per IP every 10 minutes and a global cap of 100 per day (`DAILY_CAP`). Those counters live in memory, so they reset when the free Render instance sleeps or restarts. A new session never reuses an older result. Set `WORKER_URL` only if you want the API to call an HTTP worker instead of Actions.
 
 ## Deploy the API on Render
 
@@ -54,9 +54,9 @@ The workflow file has to be on `main` before the first dispatch will succeed. Pu
 
 ## GitHub Actions worker
 
-`.github/workflows/lookup.yml` runs on `ubuntu-latest` for up to 6 minutes. It installs the worker, caches npm and the Playwright Chromium build, runs `worker/run-once.js` once, and posts each source result with `Authorization: Bearer` the `WORKER_SECRET` repository secret. The four live sources run at the same time inside that job. Separate address lookups are not queued behind each other. The address is a workflow input, so on this public repo it can still appear on the Actions run page. The script masks it in the log and does not print it. Leave Actions debug logging off.
+`.github/workflows/lookup.yml` runs on `ubuntu-latest` for up to 6 minutes. It installs the worker, caches npm and the Playwright Chromium build, runs `worker/run-once.js` once, and posts each source result with `Authorization: Bearer` the `WORKER_SECRET` repository secret. The five live sources run at the same time inside that job. Separate address lookups are not queued behind each other. The address is a workflow input, so on this public repo it can still appear on the Actions run page. The script masks it in the log and does not print it. Leave Actions debug logging off.
 
-Homebot, Chase, and Homes.com each open one fresh browser and look up only the public address page. Rate.com asks `https://www.rate.com/api/home-valuation` when the address has a street, city, state, and ZIP, and uses the page only if that request cannot be made. Realtor.com is not launched. Each source posts its own result as soon as it finishes. None of them type an email, name, phone, or password, and none submit a signup or lead form. A signup wall, a bot block, or a missing figure is Unavailable. PennyMac is not launched.
+Homebot, Chase, and Homes.com each open one fresh browser and look up only the public address page. Rate.com asks `https://www.rate.com/api/home-valuation` when the address has a street, city, state, and ZIP, and uses the page only if that request cannot be made. HAR.com asks its public address finder, then reads the property page. Homes outside the Houston area are Unavailable. Realtor.com is not launched. Each source posts its own result as soon as it finishes. None of them type an email, name, phone, or password, and none submit a signup or lead form. A signup wall, a bot block, or a missing figure is Unavailable. PennyMac is not launched.
 
 `worker/scrape.js` still contains the Redfin scraper. Nothing calls it. Redfin stays Pending on the page.
 
@@ -65,7 +65,7 @@ To run the same command locally, without printing the address yourself:
 ```bash
 cd worker
 npm install
-ADDRESS='the street address you want to check' SOURCE_ID=homebot,chase,homes,rate CHROME_PATH=/usr/bin/google-chrome node run-once.js
+ADDRESS='the street address you want to check' SOURCE_ID=homebot,chase,homes,rate,har CHROME_PATH=/usr/bin/google-chrome node run-once.js
 ```
 
 Set `WORKER_URL` on the API only when you want that HTTP worker instead of Actions. The optional server is `worker/server.js`.
