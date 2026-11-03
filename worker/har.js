@@ -98,19 +98,19 @@ function matchingRow(address, rows) {
   return null;
 }
 
-function visibleText(html) {
+function pageText(html) {
   return String(html || "")
-    .replace(/<script[\s\S]*?<\/script>/gi, " ")
     .replace(/<style[\s\S]*?<\/style>/gi, " ")
     .replace(/<[^>]+>/g, " ")
     .replace(/&nbsp;/gi, " ")
     .replace(/&#x27;|&apos;/gi, "'")
     .replace(/&amp;/gi, "&")
+    .replace(/\\u0026/g, "&")
     .replace(/\s+/g, " ");
 }
 
 function assessedByYear(html) {
-  const text = visibleText(html);
+  const text = pageText(html);
   const byYear = new Map();
   const assessed = /(19\d{2}|20\d{2})\s+Assessed Value\/Appraisal District:\s*\$?\s*([\d,]{4,})/g;
   let match;
@@ -225,7 +225,7 @@ function noteYearSignals(html) {
       });
     }
   }
-  const text = visibleText(html).replace(/\d{5,}/g, "#");
+  const text = pageText(html).replace(/\d{5,}/g, "#");
   const snippets = [];
   const yearRe = /.{0,45}\b20\d{2}\b.{0,45}/g;
   let yearMatch;
