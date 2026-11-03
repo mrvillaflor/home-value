@@ -198,52 +198,6 @@ function bracket(value, low, high) {
   return { low: null, high: null };
 }
 
-function noteYearSignals(html) {
-  const datasets = [];
-  const pattern = /<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
-  let match;
-  while ((match = pattern.exec(String(html || "")))) {
-    let data;
-    try {
-      data = JSON.parse(match[1]);
-    } catch (error) {
-      continue;
-    }
-    for (const graph of graphsFrom(data)) {
-      if (!graph || graph["@type"] !== "Dataset" || !/Appraisal/i.test(String(graph.name || ""))) continue;
-      const yearish = {};
-      for (const key of Object.keys(graph)) {
-        const value = graph[key];
-        if (typeof value === "string" && value.length < 80 && /\b(19|20)\d{2}\b/.test(value)) yearish[key] = value;
-      }
-      datasets.push({
-        name: graph.name,
-        keys: Object.keys(graph),
-        yearish,
-        description: String(graph.description || "").replace(/\d{5,}/g, "#").slice(0, 300),
-        measured: graph.variableMeasured || null,
-      });
-    }
-  }
-  const text = pageText(html);
-  const phrases = ["Assessed", "Appraisal District", "Tax Rate", "Tax History", "2025", "2026", "2024"];
-  const hits = {};
-  for (const phrase of phrases) {
-    const found = [];
-    let from = 0;
-    const lower = text.toLowerCase();
-    const needle = phrase.toLowerCase();
-    while (found.length < 2) {
-      const index = lower.indexOf(needle, from);
-      if (index < 0) break;
-      found.push(text.slice(Math.max(0, index - 40), index + 80).replace(/\b7\d{4}\b/g, "#"));
-      from = index + needle.length;
-    }
-    if (found.length) hits[phrase] = found;
-  }
-  process.stderr.write("har-year " + JSON.stringify({ hits, assessed: assessedByYear(html).slice(0, 4) }) + "\n");
-}
-
 function parseHarPage(html) {
   const datasets = readDatasets(html);
   const years = assessedByYear(html);
@@ -360,7 +314,6 @@ async function scrapeHar(address, options = {}) {
   if (page.blocked || page.status !== 200) {
     return outcome("unavailable", { error: "HAR.com blocked the property page." });
   }
-  noteYearSignals(page.body);
   const estimates = parseHarPage(page.body);
   if (!estimates.length) return outcome("unavailable", { error: "HAR.com did not show an estimate." });
   const primary = estimates.find((item) => item.name === "ICE") || estimates[0];
