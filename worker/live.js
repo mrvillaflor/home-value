@@ -5,19 +5,17 @@
 
 const { scrapeHomebot } = require("./homebot");
 const { scrapeChase } = require("./chase");
-const { scrapeRealtor } = require("./realtor");
 const { scrapeHomes } = require("./homes");
 const { scrapeRate } = require("./rate");
 
 const SCRAPERS = {
   homebot: scrapeHomebot,
   chase: scrapeChase,
-  realtor: scrapeRealtor,
   homes: scrapeHomes,
   rate: scrapeRate,
 };
 
-const LIVE_SOURCE_IDS = ["homebot", "chase", "realtor", "homes", "rate"];
+const LIVE_SOURCE_IDS = ["homebot", "chase", "homes", "rate"];
 
 function parseSourceIds(value) {
   const raw = String(value || LIVE_SOURCE_IDS.join(","));

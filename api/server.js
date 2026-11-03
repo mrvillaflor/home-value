@@ -25,7 +25,7 @@ const GITHUB_REPO = process.env.GITHUB_REPO || "mrvillaflor/home-value";
 const GITHUB_WORKFLOW = process.env.GITHUB_WORKFLOW || "lookup.yml";
 const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || "https://mrvillaflor.github.io";
 const DAILY_CAP = Number(process.env.DAILY_CAP || 100);
-const LIVE_SOURCE_IDS = ["homebot", "chase", "realtor", "homes", "rate"];
+const LIVE_SOURCE_IDS = ["homebot", "chase", "homes", "rate"];
 const limiter = createLimiter({
   dailyCap: Number.isFinite(DAILY_CAP) && DAILY_CAP > 0 ? DAILY_CAP : 100,
 });
@@ -37,7 +37,6 @@ const SOURCES = [
   { id: "chase", name: "Chase" },
   { id: "homes", name: "Homes.com" },
   { id: "rate", name: "Rate.com" },
-  { id: "realtor", name: "Realtor.com" },
 ];
 
 const sessions = new Map();

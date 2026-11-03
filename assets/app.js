@@ -13,11 +13,10 @@
  */
 
 const API_BASE = "https://home-value-api-3mvp.onrender.com";
-const LIVE_SOURCE_IDS = ["homebot", "chase", "realtor", "homes", "rate"];
+const LIVE_SOURCE_IDS = ["homebot", "chase", "homes", "rate"];
 const ESTIMATE_LABELS = {
   homebot: "Homebot estimate",
   chase: "Chase estimate",
-  realtor: "Realtor.com estimate",
   homes: "Homes.com estimate",
   rate: "Rate.com estimate",
 };
@@ -36,7 +35,6 @@ const SOURCES = [
   { id: "chase", name: "Chase" },
   { id: "homes", name: "Homes.com" },
   { id: "rate", name: "Rate.com" },
-  { id: "realtor", name: "Realtor.com" },
 ];
 
 const lookupForm = document.querySelector("#lookup");
@@ -322,7 +320,7 @@ lookupForm.addEventListener("submit", async (event) => {
       if (token !== currentRequest) return;
       paintSession(update);
       const pending = (update.sources || []).some((source) => isLiveSource(source.id) && source.status === "pending");
-      if (pending) setNote("Looking up Homebot, Chase, Realtor.com, Homes.com, and Rate.com");
+      if (pending) setNote("Looking up Homebot, Chase, Homes.com, and Rate.com");
     });
     if (token !== currentRequest) return;
 
