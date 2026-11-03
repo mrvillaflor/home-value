@@ -225,16 +225,23 @@ function noteYearSignals(html) {
       });
     }
   }
-  const text = pageText(html).replace(/\d{5,}/g, "#");
-  const snippets = [];
-  const yearRe = /.{0,45}\b20\d{2}\b.{0,45}/g;
-  let yearMatch;
-  while ((yearMatch = yearRe.exec(text)) && snippets.length < 8) snippets.push(yearMatch[0]);
-  process.stderr.write("har-year " + JSON.stringify({
-    datasets,
-    snippets,
-    assessed: assessedByYear(html).slice(0, 4),
-  }) + "\n");
+  const text = pageText(html);
+  const phrases = ["Assessed", "Appraisal District", "Tax Rate", "Tax History", "2025", "2026", "2024"];
+  const hits = {};
+  for (const phrase of phrases) {
+    const found = [];
+    let from = 0;
+    const lower = text.toLowerCase();
+    const needle = phrase.toLowerCase();
+    while (found.length < 2) {
+      const index = lower.indexOf(needle, from);
+      if (index < 0) break;
+      found.push(text.slice(Math.max(0, index - 40), index + 80).replace(/\b7\d{4}\b/g, "#"));
+      from = index + needle.length;
+    }
+    if (found.length) hits[phrase] = found;
+  }
+  process.stderr.write("har-year " + JSON.stringify({ hits, assessed: assessedByYear(html).slice(0, 4) }) + "\n");
 }
 
 function parseHarPage(html) {
