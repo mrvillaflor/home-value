@@ -1,0 +1,123 @@
+/* Reviews page components only. Base tokens, type, mast, hero, agent card
+   and footer come from styles.css (copied unchanged from home-value). */
+
+.mast-side { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+.mast-link {
+  color: var(--white);
+  font-size: 0.82rem;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-decoration: none;
+  border-bottom: 1px solid var(--champagne);
+  padding-bottom: 2px;
+}
+.mast-link:hover, .mast-link:focus-visible { color: var(--champagne); }
+
+.rv-hero-inner { grid-template-columns: minmax(0, 1fr) minmax(160px, 220px); align-items: center; }
+.rv-hero h1 { max-width: 12em; }
+.rv-hero-photo { justify-self: end; }
+.rv-hero-photo img {
+  width: 220px; height: 220px; border-radius: 50%; object-fit: cover;
+  box-shadow: 0 0 0 1px var(--champagne); background: var(--warm);
+}
+
+.rv-trust { background: var(--white); border-bottom: 1px solid rgba(0, 26, 114, 0.1); }
+.rv-trust-inner { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.rv-stat { padding: 26px 24px 24px; border-left: 1px solid rgba(0, 26, 114, 0.1); }
+.rv-stat:first-child { border-left: 0; padding-left: 0; }
+.rv-stat p { margin: 0; }
+.rv-stat-num {
+  color: var(--navy); font-family: var(--serif); font-weight: 400;
+  font-size: 2.6rem; line-height: 1; font-optical-sizing: auto;
+}
+.rv-stat-label {
+  margin-top: 8px !important; color: var(--muted); font-size: 0.75rem; font-weight: 500;
+  letter-spacing: 0.16em; text-transform: uppercase;
+}
+.rv-stat-link { margin-top: 8px !important; font-size: 0.95rem; }
+.rv-stat-link a, .rv-source a, .rv-cta-val a, .rv-legal a { color: var(--navy); text-underline-offset: 3px; }
+.rv-stat-link a:hover, .rv-source a:hover, .rv-cta-val a:hover { color: var(--hover); }
+
+.rv-reviews { background: var(--warm); padding: 56px 0 24px; }
+.rv-reviews h2, .rv-cta h2 {
+  margin: 8px 0 0; color: var(--navy); font-family: var(--serif); font-weight: 400;
+  font-size: clamp(1.7rem, 3vw, 2.5rem); line-height: 1.15; font-optical-sizing: auto;
+}
+.rv-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); gap: 16px; align-items: start; }
+
+.rv-card {
+  display: flex; flex-direction: column; padding: 22px 22px 20px;
+  background: var(--white); border: 1px solid rgba(0, 26, 114, 0.12); margin: 0;
+}
+.rv-card:hover { border-color: rgba(0, 47, 207, 0.45); }
+.rv-source {
+  display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; margin: 0;
+  color: var(--muted); font-size: 0.68rem; font-weight: 500; letter-spacing: 0.16em; text-transform: uppercase;
+}
+.rv-source a { font-size: 0.82rem; letter-spacing: 0; text-transform: none; font-weight: 400; }
+.rv-stars { display: flex; align-items: center; gap: 8px; margin: 12px 0 0; color: var(--navy); font-size: 0.9rem; }
+.rv-stars-bar { position: relative; display: inline-block; width: 90px; height: 16px; }
+.rv-stars-bar span {
+  position: absolute; inset: 0; background-repeat: repeat-x; background-size: 18px 16px;
+}
+.rv-stars-bg { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 18 16'%3E%3Cpath d='M9 1l2.2 4.6 5 .6-3.7 3.4 1 5L9 12.2 4.5 14.6l1-5L1.8 6.2l5-.6z' fill='%23e3e1dc'/%3E%3C/svg%3E"); }
+.rv-stars-fg { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 18 16'%3E%3Cpath d='M9 1l2.2 4.6 5 .6-3.7 3.4 1 5L9 12.2 4.5 14.6l1-5L1.8 6.2l5-.6z' fill='%23d2a984'/%3E%3C/svg%3E"); }
+.rv-text {
+  margin: 14px 0 0; color: var(--ink); font-size: 1rem; line-height: 1.6;
+  white-space: pre-line; overflow-wrap: anywhere;
+}
+.rv-text.is-clamped {
+  display: -webkit-box; -webkit-line-clamp: 7; -webkit-box-orient: vertical; overflow: hidden;
+}
+.rv-toggle {
+  align-self: flex-start; margin: 8px 0 0; padding: 0; border: 0; background: none; cursor: pointer;
+  color: var(--navy); font-size: 0.92rem; text-decoration: underline; text-underline-offset: 3px;
+}
+.rv-toggle:hover { color: var(--hover); }
+.rv-who { margin: 18px 0 0; padding-top: 14px; border-top: 1px solid rgba(0, 26, 114, 0.1); }
+.rv-who p { margin: 0; }
+.rv-name { color: var(--navy); font-weight: 500; font-size: 1rem; }
+.rv-context { margin-top: 2px !important; color: var(--muted); font-size: 0.9rem; line-height: 1.4; }
+.rv-date { margin-top: 2px !important; color: var(--muted); font-size: 0.85rem; }
+
+.rv-more-row { display: flex; justify-content: center; margin: 28px 0 0; }
+.rv-btn {
+  appearance: none; display: inline-flex; align-items: center; justify-content: center;
+  min-height: 52px; padding: 0 24px; border: 1px solid var(--navy); border-radius: 0;
+  background: var(--navy); color: var(--white); font-size: 0.82rem; font-weight: 500;
+  letter-spacing: 0.08em; text-transform: uppercase; text-decoration: none; cursor: pointer;
+}
+.rv-btn:hover { background: var(--hover); border-color: var(--hover); color: var(--white); }
+.rv-btn[hidden] { display: none; }
+.rv-btn-ghost { background: var(--white); color: var(--navy); }
+
+.rv-cta { background: var(--warm); padding: 48px 0 28px; }
+.rv-cta-row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 22px; }
+.rv-cta-val { margin: 18px 0 0; font-size: 1rem; }
+
+.rv-ns-note { color: var(--muted); }
+.rv-ns-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 16px; }
+.rv-ns-list li { background: var(--white); border: 1px solid rgba(0, 26, 114, 0.12); padding: 18px; }
+.rv-ns-list blockquote { margin: 0; }
+.rv-ns-list blockquote p { margin: 0; }
+.ns-meta { margin: 10px 0 0; color: var(--muted); font-size: 0.9rem; }
+
+.rv-legal a { color: var(--white); }
+.rv-legal a:hover { color: var(--champagne); }
+
+@media (max-width: 860px) {
+  .mast-side { align-items: flex-start; }
+  .rv-hero-inner { grid-template-columns: 1fr; }
+  .rv-hero-photo { justify-self: start; order: -1; }
+  .rv-hero-photo img { width: 120px; height: 120px; }
+  .rv-trust-inner { grid-template-columns: 1fr 1fr; }
+  .rv-stat:nth-child(3) { display: none; }
+}
+@media (max-width: 640px) {
+  .rv-stat { padding: 20px 0 18px 16px; }
+  .rv-stat-num { font-size: 2.1rem; }
+  .rv-reviews { padding-top: 36px; }
+  .rv-cta-row .rv-btn { flex: 1 1 100%; }
+  .rv-card { padding: 18px; }
+}

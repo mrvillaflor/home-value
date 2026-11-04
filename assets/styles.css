@@ -168,6 +168,41 @@ input {
   text-align: right;
 }
 
+.mast-side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.mast-link {
+  color: var(--white);
+  font-size: 0.82rem;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-decoration: none;
+  border-bottom: 1px solid var(--champagne);
+  padding-bottom: 2px;
+}
+
+.mast-link:hover,
+.mast-link:focus-visible {
+  color: var(--champagne);
+}
+
+.footer-reviews {
+  color: var(--white);
+  font-size: 0.95rem;
+  letter-spacing: 0.01em;
+  text-underline-offset: 3px;
+}
+
+.footer-reviews:hover,
+.footer-reviews:focus-visible {
+  color: var(--champagne);
+}
+
 .hero {
   background: var(--navy);
   color: var(--white);
@@ -641,6 +676,10 @@ button[type="submit"]:active {
 
   .mast-license {
     text-align: left;
+  }
+
+  .mast-side {
+    align-items: flex-start;
   }
 
   .hero {
