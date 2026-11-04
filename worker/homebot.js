@@ -72,17 +72,36 @@ async function scrapeHomebot(address, options = {}) {
     await box.click({ timeout: 5000 });
     await box.pressSequentially(address, { delay: 25 });
 
-    const numberMatch = address.match(/\d+/);
-    const streetNumber = numberMatch ? numberMatch[0] : "";
-    const option = page.locator('[role="option"]').filter({ hasText: streetNumber || address }).first();
-    const appeared = await option.waitFor({ timeout: Math.min(8000, timeLeft()) }).then(() => true).catch(() => false);
+    const streetNumber = (address.match(/\d+/) || [""])[0];
+    const zip = (address.match(/\b(\d{5})\b/) || [])[1] || "";
+    const unit = (address.match(/\b(?:unit|apt|apartment|suite|ste|#)\s*[A-Za-z0-9-]+\b/i) || [""])[0];
+    const options = page.locator('[role="option"]');
+    const appeared = await options.first().waitFor({ timeout: Math.min(8000, timeLeft()) }).then(() => true).catch(() => false);
     if (!appeared) {
-      return outcome("unavailable", { error: SIGNUP_ERROR });
+      const mainText = await page.evaluate(() => (document.body && document.body.innerText) || "");
+      if (asksForSignup(mainText)) return outcome("unavailable", { error: SIGNUP_ERROR });
+      return outcome("unavailable", { error: "Homebot did not show an estimate." });
     }
 
-    // Choose the address suggestion. Do not touch Sign in, email, or Go.
-    await page.keyboard.press("ArrowDown");
-    await page.keyboard.press("Enter");
+    // Click the suggestion that has this street number and ZIP.
+    // ArrowDown would accept whatever is first, including a different house.
+    let picked = false;
+    const count = Math.min(await options.count(), 8);
+    for (let i = 0; i < count; i += 1) {
+      const text = ((await options.nth(i).innerText()) || "").replace(/\s+/g, " ");
+      const numberOk = streetNumber && new RegExp("(?:^|\\D)" + streetNumber + "(?:\\D|$)").test(text);
+      const unitOk = !unit || text.toLowerCase().includes(unit.toLowerCase());
+      if (numberOk && zip && text.includes(zip) && unitOk) {
+        await options.nth(i).click({ timeout: 5000 });
+        picked = true;
+        break;
+      }
+    }
+    if (!picked) {
+      const mainText = await page.evaluate(() => (document.body && document.body.innerText) || "");
+      if (asksForSignup(mainText)) return outcome("unavailable", { error: SIGNUP_ERROR });
+      return outcome("unavailable", { error: "Homebot did not show an estimate." });
+    }
 
     const frameHandle = await page.waitForSelector('iframe[src*="preview/home"]', {
       timeout: Math.min(12000, timeLeft()),

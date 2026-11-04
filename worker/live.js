@@ -3,21 +3,20 @@
  * the others.
  */
 
+const { normalizeAddress } = require("./address");
 const { scrapeHomebot } = require("./homebot");
 const { scrapeChase } = require("./chase");
-const { scrapeHomes } = require("./homes");
 const { scrapeRate } = require("./rate");
 const { scrapeHar } = require("./har");
 
 const SCRAPERS = {
   homebot: scrapeHomebot,
   chase: scrapeChase,
-  homes: scrapeHomes,
   rate: scrapeRate,
   har: scrapeHar,
 };
 
-const LIVE_SOURCE_IDS = ["homebot", "chase", "homes", "rate", "har"];
+const LIVE_SOURCE_IDS = ["homebot", "chase", "rate", "har"];
 
 function parseSourceIds(value) {
   const raw = String(value || LIVE_SOURCE_IDS.join(","));
@@ -39,11 +38,17 @@ function unavailable(sourceId, error) {
 
 async function runSources(address, sourceIds, options = {}) {
   const ids = [...new Set(sourceIds)];
+  let normalized = address;
+  try {
+    normalized = await normalizeAddress(address);
+  } catch (error) {
+    normalized = address;
+  }
   return Promise.all(ids.map(async (id) => {
     const scrape = SCRAPERS[id];
     let outcome;
     try {
-      outcome = scrape ? await scrape(address, options) : unavailable(id, "This source is not connected.");
+      outcome = scrape ? await scrape(normalized, options) : unavailable(id, "This source is not connected.");
     } catch (error) {
       outcome = unavailable(id, "The lookup did not finish.");
     }

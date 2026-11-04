@@ -5,7 +5,7 @@
 
 function createLimiter({
   windowMs = 10 * 60 * 1000,
-  perIp = 5,
+  perIp = 15,
   dailyCap = 100,
   now = () => Date.now(),
 } = {}) {

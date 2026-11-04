@@ -25,7 +25,7 @@ const GITHUB_REPO = process.env.GITHUB_REPO || "mrvillaflor/home-value";
 const GITHUB_WORKFLOW = process.env.GITHUB_WORKFLOW || "lookup.yml";
 const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || "https://mrvillaflor.github.io";
 const DAILY_CAP = Number(process.env.DAILY_CAP || 100);
-const LIVE_SOURCE_IDS = ["homebot", "chase", "homes", "rate", "har"];
+const LIVE_SOURCE_IDS = ["homebot", "chase", "rate", "har"];
 const limiter = createLimiter({
   dailyCap: Number.isFinite(DAILY_CAP) && DAILY_CAP > 0 ? DAILY_CAP : 100,
 });
@@ -410,10 +410,22 @@ const server = http.createServer(async (req, res) => {
       send(res, 400, { error: "Invalid JSON" });
       return;
     }
-    const session = sessions.get(body.sessionId);
+    let session = sessions.get(body.sessionId);
     if (!session) {
-      send(res, 404, { error: "Session not found" });
-      return;
+      // Render's free instance drops memory on restart. Keep the result
+      // the worker already fetched instead of answering 404.
+      if (typeof body.sessionId !== "string" || !/^[0-9a-f-]{36}$/i.test(body.sessionId)) {
+        send(res, 404, { error: "Session not found" });
+        return;
+      }
+      const address = typeof body.address === "string" ? body.address.trim().replace(/\s+/g, " ").slice(0, 200) : "";
+      session = {
+        id: body.sessionId,
+        address,
+        createdAt: Date.now(),
+        sources: SOURCES.map(blankSource),
+      };
+      sessions.set(session.id, session);
     }
     if (!LIVE_SOURCE_IDS.includes(body.sourceId)) {
       send(res, 400, { error: "Only a live source can be updated." });
