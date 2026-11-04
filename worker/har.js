@@ -5,6 +5,8 @@
  * Houston-area homes only. No match is Unavailable. No signup.
  */
 
+const { harStreetQuery } = require("./address");
+
 const FINDER_URL = "https://www.har.com/api/typeapp/homevaluesfinder?for=address&query=";
 const LISTING_URL = "https://www.har.com/api/typeapp/mainlistingNS?query=";
 const CHROME_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36";
@@ -260,31 +262,36 @@ async function harGet(url, accept, timeoutMs) {
   return { status: response.status, body, blocked };
 }
 
-async function findProperty(address, timeoutMs) {
-  const urls = [FINDER_URL + encodeURIComponent(address)];
-  let sawBlock = false;
-  for (const url of urls) {
-    const result = await harGet(url, "application/json", timeoutMs);
-    if (result.blocked) {
-      sawBlock = true;
-      break;
-    }
-    if (result.status !== 200) continue;
-    const rows = finderRows(result.body);
-    if (rows == null) continue;
-    const match = matchingRow(address, rows);
+async function searchHar(query, address, timeoutMs) {
+  const finder = await harGet(FINDER_URL + encodeURIComponent(query), "application/json", timeoutMs);
+  if (finder.blocked) return { blocked: true };
+  if (finder.status === 200) {
+    const rows = finderRows(finder.body);
+    const match = rows && matchingRow(address, rows);
     if (match) return match;
-    urls.push(LISTING_URL + encodeURIComponent(address));
-    break;
   }
-  if (urls.length > 1) {
-    const result = await harGet(urls[1], "application/json", timeoutMs);
-    if (result.blocked) return { blocked: true };
-    if (result.status === 200) {
-      const rows = finderRows(result.body);
-      const match = rows && matchingRow(address, rows);
-      if (match) return match;
+  const listing = await harGet(LISTING_URL + encodeURIComponent(query), "application/json", timeoutMs);
+  if (listing.blocked) return { blocked: true };
+  if (listing.status === 200) {
+    const rows = finderRows(listing.body);
+    const match = rows && matchingRow(address, rows);
+    if (match) return match;
+  }
+  return null;
+}
+
+async function findProperty(address, timeoutMs) {
+  const queries = [address];
+  const shortQuery = harStreetQuery(address);
+  if (shortQuery && shortQuery.toLowerCase() !== address.toLowerCase()) queries.push(shortQuery);
+  let sawBlock = false;
+  for (const query of queries) {
+    const found = await searchHar(query, address, timeoutMs);
+    if (found && found.blocked) {
+      sawBlock = true;
+      continue;
     }
+    if (found) return found;
   }
   if (sawBlock) return { blocked: true };
   return null;

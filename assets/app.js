@@ -13,7 +13,7 @@
  */
 
 const API_BASE = "https://home-value-api-3mvp.onrender.com";
-const LIVE_SOURCE_IDS = ["homebot", "chase", "homes", "rate", "har"];
+const LIVE_SOURCE_IDS = ["homebot", "chase", "rate", "har"];
 const ESTIMATE_LABELS = {
   homebot: "Homebot estimate",
   chase: "Chase estimate",
@@ -24,6 +24,10 @@ const ESTIMATE_LABELS = {
 
 function isLiveSource(id) {
   return LIVE_SOURCE_IDS.includes(id);
+}
+
+function liveSourceNames() {
+  return SOURCES.filter((source) => isLiveSource(source.id)).map((source) => source.name).join(", ");
 }
 const POLL_MS = 2000;
 const POST_TIMEOUT_MS = 90000;
@@ -325,11 +329,7 @@ async function requestJson(url, options, timeoutMs) {
  * onUpdate is called with each session payload so each live card can fill
  * as soon as that source arrives. The other sources are left pending.
  */
-async function fetchEstimates(address, onUpdate) {
-  if (!address || typeof address !== "string") {
-    throw new Error("A full address is required.");
-  }
-
+async function startSession(address) {
   const created = await requestJson(
     API_BASE + "/sessions",
     {
@@ -339,15 +339,34 @@ async function fetchEstimates(address, onUpdate) {
     },
     POST_TIMEOUT_MS
   );
-
   if (!created.sessionId) {
     throw new Error("The server did not start a lookup.");
   }
+  return created.sessionId;
+}
 
+async function fetchEstimates(address, onUpdate) {
+  if (!address || typeof address !== "string") {
+    throw new Error("A full address is required.");
+  }
+
+  let sessionId = await startSession(address);
+  let restarted = false;
   const started = Date.now();
   let latest = null;
   while (Date.now() - started < POLL_BUDGET_MS) {
-    latest = await requestJson(API_BASE + "/sessions/" + created.sessionId, { method: "GET" }, 15000);
+    try {
+      latest = await requestJson(API_BASE + "/sessions/" + sessionId, { method: "GET" }, 15000);
+    } catch (error) {
+      // The free API forgets sessions when it restarts. One new lookup
+      // replaces the lost one. A second 404 is reported as-is.
+      if (error && error.status === 404 && !restarted) {
+        restarted = true;
+        sessionId = await startSession(address);
+        continue;
+      }
+      throw error;
+    }
     if (onUpdate) onUpdate(latest);
     const liveRows = (latest.sources || []).filter((source) => isLiveSource(source.id));
     const finished = liveRows.length === LIVE_SOURCE_IDS.length && liveRows.every((source) => source.status === "done" || source.status === "unavailable");
@@ -378,7 +397,7 @@ lookupForm.addEventListener("submit", async (event) => {
       if (token !== currentRequest) return;
       paintSession(update);
       const pending = (update.sources || []).some((source) => isLiveSource(source.id) && source.status === "pending");
-      if (pending) setNote("Looking up Homebot, Chase, Homes.com, Rate.com, and HAR.com");
+      if (pending) setNote("Looking up " + liveSourceNames());
     });
     if (token !== currentRequest) return;
 
@@ -399,11 +418,16 @@ lookupForm.addEventListener("submit", async (event) => {
   } catch (error) {
     if (token !== currentRequest) return;
     const timedOut = error && error.name === "AbortError";
+    const apiMessage = error && error.status ? visitorError(error.message) : "";
+    const detail = timedOut
+      ? "The server is still waking up. Try the address again."
+      : (apiMessage && apiMessage !== "No estimate returned" ? apiMessage : "The lookup service did not respond.");
     results.querySelectorAll(".source").forEach((card) => {
       if (!isLiveSource(card.dataset.source)) return;
-      showUnavailable(card, timedOut ? "The server is still waking up. Try the address again." : "The lookup service did not respond.");
+      if (card.dataset.state === "done") return;
+      showUnavailable(card, detail);
     });
-    setNote(timedOut ? "The server did not wake up in time. No dollar amount is shown." : "The lookup service did not respond. No dollar amount is shown.");
+    setNote(timedOut ? "The server did not wake up in time. No dollar amount is shown." : detail);
     results.setAttribute("aria-busy", "false");
   }
 });

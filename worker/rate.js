@@ -7,6 +7,7 @@
  */
 
 const { chromium } = require("playwright");
+const { parseLoose } = require("./address");
 
 const RATE_PAGE = "https://www.rate.com/home-valuation";
 const RATE_API = "https://www.rate.com/api/home-valuation";
@@ -31,15 +32,14 @@ function outcome(status, extra) {
 }
 
 function splitUsAddress(address) {
-  const text = String(address || "").trim().replace(/\s+/g, " ");
-  const match = text.match(/^(.*?),\s*([^,]+?),\s*([A-Za-z]{2})\s+(\d{5})(?:-\d{4})?$/);
-  if (!match) return null;
-  const street = match[1].trim();
-  const city = match[2].trim();
-  const state = match[3].toUpperCase();
-  const zip = match[4];
-  if (street.length < 3 || !/\d/.test(street) || city.length < 2) return null;
-  return { street, city, state, zip };
+  const parts = parseLoose(address);
+  if (!parts) return null;
+  return {
+    street: parts.street,
+    city: parts.city,
+    state: parts.state,
+    zip: parts.zip,
+  };
 }
 
 function sameHouse(parts, property) {

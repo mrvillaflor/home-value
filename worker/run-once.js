@@ -26,6 +26,7 @@ async function postResult(callbackUrl, secret, sessionId, outcome) {
     },
     body: JSON.stringify({
       sessionId,
+      address,
       sourceId: outcome.sourceId,
       status: outcome.status,
       value: outcome.value,
