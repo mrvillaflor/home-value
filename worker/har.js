@@ -2,16 +2,17 @@
  * HAR.com public home-value page.
  * The finder and the property page are plain GETs. A desktop Chrome
  * Accept header is required; anything else is a PerimeterX block.
+ * The user agent varies per attempt. A block or HTTP 429/403 waits
+ * briefly and tries once more, then this source is Unavailable.
  * Houston-area homes only. No match is Unavailable. No signup.
  */
 
 const { harStreetQuery } = require("./address");
+const { browserHeaders, blockKind, withOneRetry } = require("./harden");
 
 const FINDER_URL = "https://www.har.com/api/typeapp/homevaluesfinder?for=address&query=";
 const LISTING_URL = "https://www.har.com/api/typeapp/mainlistingNS?query=";
-const CHROME_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36";
 const HTML_ACCEPT = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8";
-const BLOCK_RE = /px-captcha|access to this page has been denied|verify you are human/i;
 const NAMES = ["ICE", "Cotality", "Appraisal District"];
 
 function outcome(status, extra) {
@@ -246,32 +247,28 @@ function parseHarPage(html) {
   return estimates.filter((item) => NAMES.includes(item.name));
 }
 
-async function harGet(url, accept, timeoutMs) {
+async function harGet(url, accept, timeoutMs, attempt) {
   const response = await fetch(url, {
     method: "GET",
     redirect: "follow",
-    headers: {
-      "User-Agent": CHROME_UA,
-      Accept: accept,
-      "Accept-Language": "en-US,en;q=0.9",
-    },
+    headers: browserHeaders(attempt, accept),
     signal: AbortSignal.timeout(timeoutMs),
   });
   const body = await response.text();
-  const blocked = response.status === 403 || response.status === 429 || BLOCK_RE.test(body.slice(0, 5000));
-  return { status: response.status, body, blocked };
+  const kind = blockKind(response.status, body.slice(0, 5000));
+  return { status: response.status, body, blocked: Boolean(kind), kind };
 }
 
-async function searchHar(query, address, timeoutMs) {
-  const finder = await harGet(FINDER_URL + encodeURIComponent(query), "application/json", timeoutMs);
-  if (finder.blocked) return { blocked: true };
+async function searchHar(query, address, timeoutMs, attempt) {
+  const finder = await harGet(FINDER_URL + encodeURIComponent(query), "application/json", timeoutMs, attempt);
+  if (finder.blocked) return { blocked: true, kind: finder.kind };
   if (finder.status === 200) {
     const rows = finderRows(finder.body);
     const match = rows && matchingRow(address, rows);
     if (match) return match;
   }
-  const listing = await harGet(LISTING_URL + encodeURIComponent(query), "application/json", timeoutMs);
-  if (listing.blocked) return { blocked: true };
+  const listing = await harGet(LISTING_URL + encodeURIComponent(query), "application/json", timeoutMs, attempt);
+  if (listing.blocked) return { blocked: true, kind: listing.kind };
   if (listing.status === 200) {
     const rows = finderRows(listing.body);
     const match = rows && matchingRow(address, rows);
@@ -280,46 +277,59 @@ async function searchHar(query, address, timeoutMs) {
   return null;
 }
 
-async function findProperty(address, timeoutMs) {
+async function findProperty(address, timeoutMs, attempt) {
   const queries = [address];
   const shortQuery = harStreetQuery(address);
   if (shortQuery && shortQuery.toLowerCase() !== address.toLowerCase()) queries.push(shortQuery);
   let sawBlock = false;
+  let blockKindName = "";
   for (const query of queries) {
-    const found = await searchHar(query, address, timeoutMs);
+    const found = await searchHar(query, address, timeoutMs, attempt);
     if (found && found.blocked) {
       sawBlock = true;
+      blockKindName = found.kind || blockKindName;
       continue;
     }
     if (found) return found;
   }
-  if (sawBlock) return { blocked: true };
+  if (sawBlock) return { blocked: true, kind: blockKindName };
   return null;
 }
 
-async function scrapeHar(address, options = {}) {
-  const timeoutMs = Math.min(20000, options.timeoutMs || 20000);
+function harBlockError(kind, where) {
+  if (kind === "rate-limited") return "HAR.com rate-limited the lookup.";
+  if (where === "page") return "HAR.com blocked the property page.";
+  return "HAR.com blocked the address search.";
+}
+
+async function scrapeHarAttempt(address, deadline, attempt) {
+  const requestTimeout = () => Math.max(1000, Math.min(15000, deadline - Date.now()));
   let found;
   try {
-    found = await findProperty(address, timeoutMs);
+    found = await findProperty(address, requestTimeout(), attempt);
   } catch (error) {
     const message = String(error && error.message ? error.message : error);
     if (/timeout/i.test(message)) return outcome("unavailable", { error: "HAR.com did not respond in time." });
     return outcome("unavailable", { error: "HAR.com did not show an estimate." });
   }
-  if (found && found.blocked) return outcome("unavailable", { error: "HAR.com blocked the address search." });
+  if (found && found.blocked) {
+    return outcome("unavailable", { error: harBlockError(found.kind, "search") });
+  }
   if (!found) return outcome("unavailable", { error: "HAR.com did not find this home." });
 
   let page;
   try {
-    page = await harGet(found.url, HTML_ACCEPT, timeoutMs);
+    page = await harGet(found.url, HTML_ACCEPT, requestTimeout(), attempt);
   } catch (error) {
     const message = String(error && error.message ? error.message : error);
     if (/timeout/i.test(message)) return outcome("unavailable", { error: "HAR.com did not respond in time." });
     return outcome("unavailable", { error: "HAR.com did not show an estimate." });
   }
-  if (page.blocked || page.status !== 200) {
-    return outcome("unavailable", { error: "HAR.com blocked the property page." });
+  if (page.blocked || page.status === 403 || page.status === 429) {
+    return outcome("unavailable", { error: harBlockError(page.kind || (page.status === 429 ? "rate-limited" : "blocked"), "page") });
+  }
+  if (page.status !== 200) {
+    return outcome("unavailable", { error: "HAR.com did not show an estimate." });
   }
   const estimates = parseHarPage(page.body);
   if (!estimates.length) return outcome("unavailable", { error: "HAR.com did not show an estimate." });
@@ -332,6 +342,11 @@ async function scrapeHar(address, options = {}) {
     estimates,
     url: found.url,
   });
+}
+
+async function scrapeHar(address, options = {}) {
+  const deadline = Date.now() + (options.timeoutMs || 40000);
+  return withOneRetry(deadline, (attempt) => scrapeHarAttempt(address, deadline, attempt));
 }
 
 module.exports = { scrapeHar, parseHarPage, matchingRow, propertyUrl };

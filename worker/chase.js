@@ -7,6 +7,7 @@
  */
 
 const { chromium } = require("playwright");
+const { openPage, blockError, withOneRetry } = require("./harden");
 
 const CHASE_URL = "https://www.chase.com/personal/mortgage/calculators-resources/home-value-estimator";
 const BLOCK_RE = /access denied|press\s*&\s*hold|px-captcha|verify you are human|are you a robot|request blocked|kasada/i;
@@ -37,6 +38,10 @@ function outcome(status, extra) {
 
 async function scrapeChase(address, options = {}) {
   const deadline = Date.now() + (options.timeoutMs || 40000);
+  return withOneRetry(deadline, (attempt) => scrapeChaseAttempt(address, options, deadline, attempt));
+}
+
+async function scrapeChaseAttempt(address, options, deadline, attempt) {
   const timeLeft = () => Math.max(500, deadline - Date.now());
   const launch = {
     headless: true,
@@ -46,17 +51,19 @@ async function scrapeChase(address, options = {}) {
 
   const browser = await chromium.launch(launch);
   try {
-    const page = await browser.newPage({
-      viewport: { width: 1366, height: 1000 },
-      userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-    });
+    const { page } = await openPage(browser, attempt);
     page.setDefaultTimeout(Math.min(12000, timeLeft()));
     const response = await page.goto(CHASE_URL, {
       waitUntil: "domcontentloaded",
       timeout: Math.min(20000, timeLeft()),
     });
-    if (!response || response.status() >= 400) {
-      return outcome("unavailable", { error: "Chase blocked the lookup." });
+    const status = response ? response.status() : 0;
+    const title = await page.title().catch(() => "");
+    const snippet = await page.evaluate(() => ((document.body && document.body.innerText) || "").slice(0, 2000)).catch(() => "");
+    const blocked = blockError("Chase", status, title + "\n" + snippet);
+    if (blocked) return outcome("unavailable", { error: blocked });
+    if (!response || status >= 400) {
+      return outcome("unavailable", { error: "Chase did not load." });
     }
 
     const frameDeadline = Date.now() + Math.min(15000, timeLeft());
@@ -78,7 +85,8 @@ async function scrapeChase(address, options = {}) {
     ).catch(() => {});
 
     const text = await frame.evaluate(() => (document.body && document.body.innerText) || "");
-    if (BLOCK_RE.test(text)) return outcome("unavailable", { error: "Chase blocked the lookup." });
+    const frameBlocked = blockError("Chase", 0, text);
+    if (frameBlocked) return outcome("unavailable", { error: frameBlocked });
     const streetNumber = (address.match(/\d+/) || [""])[0];
     if (streetNumber && !text.includes(streetNumber)) {
       return outcome("unavailable", { error: "Chase did not show an estimate." });

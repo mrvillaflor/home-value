@@ -1,4 +1,4 @@
-# One dispatch looks up Homebot, Chase, and Realtor.com together.
+# One dispatch looks up Homebot, Chase, Rate.com, and HAR.com together.
 # They run in parallel inside this single job so Playwright starts once.
 # Separate address lookups are not queued behind each other.
 name: Lookup

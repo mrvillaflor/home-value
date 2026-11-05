@@ -8,6 +8,7 @@
  */
 
 const { chromium } = require("playwright");
+const { openPage, blockError, withOneRetry } = require("./harden");
 
 const HOMEBOT_URL = "https://get.homebot.ai/?id=d349faa6-b63a-427c-874f-13ead9609b31";
 const SIGNUP_ERROR = "Homebot requires a signup to show the estimate.";
@@ -42,6 +43,10 @@ function outcome(status, extra) {
 
 async function scrapeHomebot(address, options = {}) {
   const deadline = Date.now() + (options.timeoutMs || 40000);
+  return withOneRetry(deadline, (attempt) => scrapeHomebotAttempt(address, options, deadline, attempt));
+}
+
+async function scrapeHomebotAttempt(address, options, deadline, attempt) {
   const timeLeft = () => Math.max(500, deadline - Date.now());
   const launch = {
     headless: true,
@@ -51,17 +56,19 @@ async function scrapeHomebot(address, options = {}) {
 
   const browser = await chromium.launch(launch);
   try {
-    const page = await browser.newPage({
-      viewport: { width: 1280, height: 900 },
-      userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-    });
+    const { page } = await openPage(browser, attempt);
     page.setDefaultTimeout(Math.min(12000, timeLeft()));
 
     const response = await page.goto(HOMEBOT_URL, {
       waitUntil: "domcontentloaded",
       timeout: Math.min(20000, timeLeft()),
     });
-    if (!response || response.status() >= 400) {
+    const status = response ? response.status() : 0;
+    const title = await page.title().catch(() => "");
+    const snippet = await page.evaluate(() => ((document.body && document.body.innerText) || "").slice(0, 2000)).catch(() => "");
+    const blocked = blockError("Homebot", status, title + "\n" + snippet);
+    if (blocked) return outcome("unavailable", { error: blocked });
+    if (!response || status >= 400) {
       return outcome("unavailable", { error: "Homebot did not load." });
     }
 
@@ -75,8 +82,8 @@ async function scrapeHomebot(address, options = {}) {
     const streetNumber = (address.match(/\d+/) || [""])[0];
     const zip = (address.match(/\b(\d{5})\b/) || [])[1] || "";
     const unit = (address.match(/\b(?:unit|apt|apartment|suite|ste|#)\s*[A-Za-z0-9-]+\b/i) || [""])[0];
-    const options = page.locator('[role="option"]');
-    const appeared = await options.first().waitFor({ timeout: Math.min(8000, timeLeft()) }).then(() => true).catch(() => false);
+    const suggestions = page.locator('[role="option"]');
+    const appeared = await suggestions.first().waitFor({ timeout: Math.min(8000, timeLeft()) }).then(() => true).catch(() => false);
     if (!appeared) {
       const mainText = await page.evaluate(() => (document.body && document.body.innerText) || "");
       if (asksForSignup(mainText)) return outcome("unavailable", { error: SIGNUP_ERROR });
@@ -86,13 +93,13 @@ async function scrapeHomebot(address, options = {}) {
     // Click the suggestion that has this street number and ZIP.
     // ArrowDown would accept whatever is first, including a different house.
     let picked = false;
-    const count = Math.min(await options.count(), 8);
+    const count = Math.min(await suggestions.count(), 8);
     for (let i = 0; i < count; i += 1) {
-      const text = ((await options.nth(i).innerText()) || "").replace(/\s+/g, " ");
+      const text = ((await suggestions.nth(i).innerText()) || "").replace(/\s+/g, " ");
       const numberOk = streetNumber && new RegExp("(?:^|\\D)" + streetNumber + "(?:\\D|$)").test(text);
       const unitOk = !unit || text.toLowerCase().includes(unit.toLowerCase());
       if (numberOk && zip && text.includes(zip) && unitOk) {
-        await options.nth(i).click({ timeout: 5000 });
+        await suggestions.nth(i).click({ timeout: 5000 });
         picked = true;
         break;
       }

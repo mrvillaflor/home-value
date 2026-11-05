@@ -4,12 +4,12 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Home value · Matthew Villaflor · The Kinne Group | SERHANT.</title>
-    <meta name="description" content="Compare public home-value sources for one address with Matthew Villaflor, The Kinne Group | SERHANT. No signup. Dollar amounts are not shown until a live source is connected.">
+    <meta name="description" content="Compare Homebot, Chase, Rate.com, and HAR.com estimates for one address with Matthew Villaflor, The Kinne Group | SERHANT. No signup.">
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate">
     <meta http-equiv="Pragma" content="no-cache">
     <meta name="theme-color" content="#001A72">
     <meta property="og:title" content="Home value · Matthew Villaflor · The Kinne Group | SERHANT.">
-    <meta property="og:description" content="One address, read across public home-value sources. No signup, and no dollar amount until a live source is connected.">
+    <meta property="og:description" content="One address, read across Homebot, Chase, Rate.com, and HAR.com. No signup.">
     <meta property="og:type" content="website">
     <link rel="icon" href="assets/mv-logo-black.png" media="(prefers-color-scheme: light)">
     <link rel="icon" href="assets/mv-logo-white.png" media="(prefers-color-scheme: dark)">
@@ -41,7 +41,7 @@
           <div class="hero-copy">
             <p class="eyebrow"><span>Home value</span></p>
             <h1 id="hero-title">Compare public estimates for one address.</h1>
-            <p class="lede">Enter the full street address and press Enter. Homebot, Chase, Rate.com, and HAR.com are checked live. The other sources stay pending until they are connected.</p>
+            <p class="lede">Enter the full street address and press Enter. Homebot, Chase, Rate.com, and HAR.com are checked live.</p>
 
             <form id="lookup" autocomplete="off">
               <label for="address">Street address</label>
@@ -63,7 +63,7 @@
               <p id="lookup-hint" class="hint" role="status"></p>
             </form>
 
-            <p class="privacy">Nothing you type is stored on this page. Refreshing clears the address.</p>
+            <p class="privacy">Refreshing clears the address box. Successful estimates are remembered in this browser for 24 hours.</p>
             <noscript>
               <p class="noscript">JavaScript is off, so the source list cannot be shown. Matthew Villaflor can be reached at 713-456-9200 or Matthew@Villaflor.net.</p>
             </noscript>
@@ -72,11 +72,8 @@
           <div class="hero-index">
             <p class="index-label">Included sources</p>
             <ul id="source-index" class="source-index">
-              <li>Redfin</li>
               <li>Homebot</li>
-              <li>Zillow</li>
               <li>Chase</li>
-              <li>Homes.com</li>
               <li>Rate.com</li>
               <li>HAR.com</li>
             </ul>
@@ -127,10 +124,12 @@
           </svg>
           <span>Equal Housing Opportunity. Serhant Texas, LLC supports the Fair Housing Act and does not discriminate because of race, color, religion, sex, disability, familial status, or national origin.</span>
         </p>
-        <p>Redfin, Homebot, Zillow, Chase, Homes.com, Rate.com, and HAR.com are named for identification only. Listing a source here does not imply endorsement, sponsorship, or affiliation.</p>
+        <p>Homebot, Chase, Rate.com, and HAR.com are named for identification only. Listing a source here does not imply endorsement, sponsorship, or affiliation.</p>
       </div>
     </footer>
 
-    <script src="assets/app.js?v=12" defer></script>
+    <script src="api/address.js?v=1" defer></script>
+    <script src="api/result-cache.js?v=1" defer></script>
+    <script src="assets/app.js?v=13" defer></script>
   </body>
 </html>

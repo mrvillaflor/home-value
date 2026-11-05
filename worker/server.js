@@ -85,6 +85,7 @@ async function postCallback(job, outcome) {
     },
     body: JSON.stringify({
       sessionId: job.sessionId,
+      address: job.address,
       sourceId: outcome.sourceId,
       status: outcome.status,
       value: outcome.value,

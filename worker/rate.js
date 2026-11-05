@@ -8,10 +8,10 @@
 
 const { chromium } = require("playwright");
 const { parseLoose } = require("./address");
+const { browserHeaders, blockKind, blockError, backoff, shouldRetry, openPage, withOneRetry } = require("./harden");
 
 const RATE_PAGE = "https://www.rate.com/home-valuation";
 const RATE_API = "https://www.rate.com/api/home-valuation";
-const BLOCK_RE = /access denied|verify you are human|captcha|request blocked|too many requests/i;
 
 function money(raw) {
   const value = Number(String(raw).replace(/,/g, ""));
@@ -74,7 +74,7 @@ function parseRateEstimate(text) {
   return { value, low: null, high: null };
 }
 
-async function lookupRateApi(address) {
+async function lookupRateApi(address, deadline) {
   const parts = splitUsAddress(address);
   if (!parts) return null;
   const url = new URL(RATE_API);
@@ -82,33 +82,44 @@ async function lookupRateApi(address) {
   url.searchParams.set("city", parts.city);
   url.searchParams.set("state", parts.state);
   url.searchParams.set("zip", parts.zip);
-  let response;
-  try {
-    response = await fetch(url, {
-      headers: { Accept: "application/json" },
-      signal: AbortSignal.timeout(15000),
-    });
-  } catch (error) {
-    return null;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    let response;
+    try {
+      response = await fetch(url, {
+        headers: browserHeaders(attempt, "application/json"),
+        signal: AbortSignal.timeout(Math.min(15000, Math.max(1000, deadline - Date.now()))),
+      });
+    } catch (error) {
+      return null;
+    }
+    const kind = blockKind(response.status, "");
+    if (kind) {
+      if (attempt === 0 && shouldRetry(deadline, 8000)) {
+        await backoff(deadline);
+        continue;
+      }
+      return null;
+    }
+    if (!response.ok) return null;
+    let data;
+    try {
+      data = await response.json();
+    } catch (error) {
+      return null;
+    }
+    const property = data && data.propertyData;
+    if (!property || !sameHouse(parts, property)) return null;
+    const value = money(property.estimatedValue);
+    if (value == null) {
+      return outcome("unavailable", { error: "Rate.com did not show an estimate." });
+    }
+    const range = rangeAround(value, property.estimateLow, property.estimateHigh);
+    return outcome("done", { value, low: range.low, high: range.high });
   }
-  if (!response.ok) return null;
-  let data;
-  try {
-    data = await response.json();
-  } catch (error) {
-    return null;
-  }
-  const property = data && data.propertyData;
-  if (!property || !sameHouse(parts, property)) return null;
-  const value = money(property.estimatedValue);
-  if (value == null) {
-    return outcome("unavailable", { error: "Rate.com did not show an estimate." });
-  }
-  const range = rangeAround(value, property.estimateLow, property.estimateHigh);
-  return outcome("done", { value, low: range.low, high: range.high });
+  return null;
 }
 
-async function scrapeRateBrowser(address, options, deadline) {
+async function scrapeRateBrowser(address, options, deadline, attempt) {
   const timeLeft = () => Math.max(500, deadline - Date.now());
   const launch = {
     headless: true,
@@ -117,15 +128,17 @@ async function scrapeRateBrowser(address, options, deadline) {
   if (options.chromePath) launch.executablePath = options.chromePath;
   const browser = await chromium.launch(launch);
   try {
-    const page = await browser.newPage({
-      viewport: { width: 1366, height: 900 },
-      userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-    });
+    const { page } = await openPage(browser, attempt);
     const response = await page.goto(RATE_PAGE, {
       waitUntil: "domcontentloaded",
       timeout: Math.min(20000, timeLeft()),
     });
-    if (!response || response.status() >= 400) return outcome("unavailable", { error: "Rate.com blocked the lookup." });
+    const status = response ? response.status() : 0;
+    const title = await page.title().catch(() => "");
+    const snippet = await page.evaluate(() => ((document.body && document.body.innerText) || "").slice(0, 2000)).catch(() => "");
+    const blocked = blockError("Rate.com", status, title + "\n" + snippet);
+    if (blocked) return outcome("unavailable", { error: blocked });
+    if (!response || status >= 400) return outcome("unavailable", { error: "Rate.com did not load." });
     const box = page.locator("#address");
     if (!(await box.count())) return outcome("unavailable", { error: "Rate.com did not show an estimate." });
     const ready = await page.waitForFunction(() => {
@@ -147,7 +160,8 @@ async function scrapeRateBrowser(address, options, deadline) {
       return location.pathname.indexOf("/results") !== -1 || /home value estimate/i.test(text);
     }, null, { timeout: Math.min(12000, timeLeft()) }).catch(() => {});
     const text = await page.evaluate(() => (document.body && document.body.innerText) || "");
-    if (BLOCK_RE.test(text)) return outcome("unavailable", { error: "Rate.com blocked the lookup." });
+    const pageBlocked = blockError("Rate.com", 0, text);
+    if (pageBlocked) return outcome("unavailable", { error: pageBlocked });
     const parsed = parseRateEstimate(text);
     if (parsed && parsed.value != null && streetNumber && text.includes(streetNumber)) {
       return outcome("done", parsed);
@@ -164,9 +178,12 @@ async function scrapeRateBrowser(address, options, deadline) {
 
 async function scrapeRate(address, options = {}) {
   const deadline = Date.now() + (options.timeoutMs || 40000);
-  const direct = await lookupRateApi(address);
+  const direct = await lookupRateApi(address, deadline);
   if (direct) return direct;
-  return scrapeRateBrowser(address, options, deadline);
+  if (deadline - Date.now() < 5000) {
+    return outcome("unavailable", { error: "Rate.com did not respond in time." });
+  }
+  return withOneRetry(deadline, (attempt) => scrapeRateBrowser(address, options, deadline, attempt));
 }
 
 module.exports = { scrapeRate, splitUsAddress };
