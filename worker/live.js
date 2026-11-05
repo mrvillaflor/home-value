@@ -1,6 +1,6 @@
 /*
  * Live sources run together in one process. One failure does not cancel
- * the others.
+ * the others. A block retry stays inside that source's own promise.
  */
 
 const { normalizeAddress } = require("./address");

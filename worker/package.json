@@ -5,7 +5,8 @@
     "node": ">=20"
   },
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "test": "node harden.test.js && node run-once.test.js"
   },
   "dependencies": {
     "playwright": "1.64.1"

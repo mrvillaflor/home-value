@@ -1,13 +1,14 @@
 /*
  * In-memory session API for the home-value page.
  *
- * POST /sessions          { address } → { sessionId }
+ * POST /sessions          { address, have? } → { sessionId }
  * GET  /sessions/:id      one row per source
  * POST /callbacks         worker result, Bearer WORKER_SECRET
  * GET  /health
  *
- * One lookup run checks Homebot, Chase, and Realtor.com. The other
- * sources stay pending.
+ * Homebot, Chase, Rate.com, and HAR.com are the live sources.
+ * A successful estimate is remembered for 24 hours, per source, under
+ * the normalized address. Unavailable results are not remembered.
  * Nothing is written to disk. Render's free instance can forget this
  * memory whenever it sleeps.
  */
@@ -16,6 +17,8 @@ const http = require("http");
 const crypto = require("crypto");
 const { dispatchGitHubWorkflow } = require("./dispatch");
 const { createLimiter } = require("./limits");
+const { cacheKey } = require("./address");
+const { createStore, freshMap, remember, TTL_MS } = require("./result-cache");
 
 const PORT = Number(process.env.PORT) || 10000;
 const WORKER_URL = (process.env.WORKER_URL || "").replace(/\/$/, "");
@@ -26,22 +29,32 @@ const GITHUB_WORKFLOW = process.env.GITHUB_WORKFLOW || "lookup.yml";
 const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || "https://mrvillaflor.github.io";
 const DAILY_CAP = Number(process.env.DAILY_CAP || 100);
 const LIVE_SOURCE_IDS = ["homebot", "chase", "rate", "har"];
-const limiter = createLimiter({
+let limiter = createLimiter({
   dailyCap: Number.isFinite(DAILY_CAP) && DAILY_CAP > 0 ? DAILY_CAP : 100,
 });
 
 const SOURCES = [
-  { id: "redfin", name: "Redfin" },
   { id: "homebot", name: "Homebot" },
-  { id: "zillow", name: "Zillow" },
   { id: "chase", name: "Chase" },
-  { id: "homes", name: "Homes.com" },
   { id: "rate", name: "Rate.com" },
   { id: "har", name: "HAR.com" },
 ];
 
 const sessions = new Map();
 const SESSION_TTL_MS = 30 * 60 * 1000;
+const resultStore = createStore();
+const resultCache = {
+  get(address, now = Date.now()) {
+    return freshMap(resultStore, cacheKey(address), now, TTL_MS);
+  },
+  put(address, sourceId, result, now = Date.now()) {
+    return remember(resultStore, cacheKey(address), sourceId, result, now, TTL_MS);
+  },
+  clear() {
+    resultStore.entries = {};
+  },
+};
+let dispatchOverride = null;
 
 function isFullAddress(value) {
   if (typeof value !== "string") return false;
@@ -256,6 +269,8 @@ function normalizeHarUrl(value) {
 
 function markUnavailable(session, error) {
   for (const sourceId of LIVE_SOURCE_IDS) {
+    const row = session.sources.find((source) => source.id === sourceId);
+    if (!row || row.status !== "pending") continue;
     markSource(session, sourceId, {
       status: "unavailable",
       value: null,
@@ -267,7 +282,27 @@ function markUnavailable(session, error) {
   }
 }
 
-function dispatchHttpWorker(session, callbackUrl) {
+function cachedSource(source, result) {
+  return {
+    id: source.id,
+    name: source.name,
+    status: "done",
+    value: result.value,
+    low: result.low == null ? null : result.low,
+    high: result.high == null ? null : result.high,
+    fetchedAt: result.fetchedAt || new Date().toISOString(),
+    error: null,
+    estimates: result.estimates || null,
+    url: result.url || null,
+  };
+}
+
+function claimedSources(body) {
+  if (!body || !Array.isArray(body.have)) return [];
+  return [...new Set(body.have.filter((id) => typeof id === "string" && LIVE_SOURCE_IDS.includes(id)))];
+}
+
+function dispatchHttpWorker(session, callbackUrl, sourceIds) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 20000);
   fetch(WORKER_URL + "/jobs", {
@@ -280,7 +315,7 @@ function dispatchHttpWorker(session, callbackUrl) {
       sessionId: session.id,
       address: session.address,
       callbackUrl,
-      sourceId: LIVE_SOURCE_IDS.join(","),
+      sourceId: sourceIds.join(","),
     }),
     signal: controller.signal,
   })
@@ -295,7 +330,11 @@ function dispatchHttpWorker(session, callbackUrl) {
     .finally(() => clearTimeout(timer));
 }
 
-function dispatchWorker(req, session) {
+function dispatchWorker(req, session, sourceIds) {
+  if (dispatchOverride) {
+    dispatchOverride(session, sourceIds.slice());
+    return;
+  }
   const callbackUrl = publicBase(req) + "/callbacks";
 
   if (WORKER_URL) {
@@ -303,7 +342,7 @@ function dispatchWorker(req, session) {
       markUnavailable(session, "The lookup service is not configured.");
       return;
     }
-    dispatchHttpWorker(session, callbackUrl);
+    dispatchHttpWorker(session, callbackUrl, sourceIds);
     return;
   }
 
@@ -320,7 +359,7 @@ function dispatchWorker(req, session) {
     inputs: {
       sessionId: session.id,
       address: session.address,
-      sourceId: LIVE_SOURCE_IDS.join(","),
+      sourceId: sourceIds.join(","),
       callbackUrl,
     },
   })
@@ -362,23 +401,29 @@ const server = http.createServer(async (req, res) => {
       send(res, 400, { error: "Enter a full street address, including city and state." });
       return;
     }
-    const limit = limiter.check(clientIp(req));
-    if (!limit.ok) {
-      const error = limit.reason === "daily"
-        ? "The lookup limit for today has been reached."
-        : "Too many lookups from this network. Try again in a few minutes.";
-      send(res, 429, { error });
-      return;
+    const cached = resultCache.get(address);
+    const have = claimedSources(body);
+    const missing = LIVE_SOURCE_IDS.filter((id) => !cached[id] && !have.includes(id));
+    const fullyCached = LIVE_SOURCE_IDS.every((id) => cached[id]);
+    if (!fullyCached) {
+      const limit = limiter.check(clientIp(req));
+      if (!limit.ok) {
+        const error = limit.reason === "daily"
+          ? "The lookup limit for today has been reached."
+          : "Too many lookups from this network. Try again in a few minutes.";
+        send(res, 429, { error });
+        return;
+      }
     }
     pruneSessions();
     const session = {
       id: crypto.randomUUID(),
       address,
       createdAt: Date.now(),
-      sources: SOURCES.map(blankSource),
+      sources: SOURCES.map((source) => (cached[source.id] ? cachedSource(source, cached[source.id]) : blankSource(source))),
     };
     sessions.set(session.id, session);
-    dispatchWorker(req, session);
+    if (missing.length) dispatchWorker(req, session, missing);
     send(res, 201, { sessionId: session.id });
     return;
   }
@@ -437,6 +482,8 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     markSource(session, body.sourceId, result);
+    const cacheAddress = session.address || (typeof body.address === "string" ? body.address : "");
+    if (result.status === "done") resultCache.put(cacheAddress, body.sourceId, result);
     send(res, 204, null);
     return;
   }
@@ -444,6 +491,29 @@ const server = http.createServer(async (req, res) => {
   send(res, 404, { error: "Not found" });
 });
 
-server.listen(PORT, () => {
-  process.stdout.write("home-value-api listening on " + PORT + "\n");
-});
+function resetForTests() {
+  sessions.clear();
+  resultCache.clear();
+  dispatchOverride = null;
+  limiter = createLimiter({
+    dailyCap: Number.isFinite(DAILY_CAP) && DAILY_CAP > 0 ? DAILY_CAP : 100,
+  });
+}
+
+function setDispatchForTests(fn) {
+  dispatchOverride = fn;
+}
+
+if (require.main === module) {
+  server.listen(PORT, () => {
+    process.stdout.write("home-value-api listening on " + PORT + "\n");
+  });
+}
+
+module.exports = {
+  server,
+  resultCache,
+  resetForTests,
+  setDispatchForTests,
+  LIVE_SOURCE_IDS,
+};

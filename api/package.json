@@ -5,6 +5,7 @@
     "node": ">=20"
   },
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "test": "node dispatch.test.js && node cache.test.js && node session-cache.test.js"
   }
 }

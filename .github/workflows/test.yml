@@ -1,0 +1,34 @@
+# Callback, cache, and scraper-guard tests. No browsers.
+name: Tests
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: API tests
+        working-directory: api
+        run: npm test
+
+      - name: Install worker dependencies
+        working-directory: worker
+        run: npm ci
+
+      - name: Worker tests
+        working-directory: worker
+        run: npm test
